@@ -1,0 +1,45 @@
+# Caddyfile for n8n
+# Copy this to /etc/caddy/Caddyfile on your VM
+# Then run: sudo systemctl restart caddy
+#
+# Replace n8n.yourdomain.com with your actual domain
+
+n8n.yourdomain.com {
+    # Reverse proxy to n8n container
+    reverse_proxy localhost:5678
+
+    # Optional: Add rate limiting for webhooks
+    # Uncomment if you want to limit requests
+    # rate_limit {
+    #     zone n8n_zone {
+    #         key    {remote_host}
+    #         events 100
+    #         window 1m
+    #     }
+    # }
+
+    # Logging
+    log {
+        output file /var/log/caddy/n8n-access.log
+        format json
+    }
+}
+
+# Optional: Redirect www to non-www
+# www.yourdomain.com {
+#     redir https://yourdomain.com{uri} permanent
+# }
+
+# Optional: If you want to serve n8n on a subpath of your main domain
+# yourdomain.com {
+#     handle /n8n/* {
+#         uri strip_prefix /n8n
+#         reverse_proxy localhost:5678
+#     }
+#
+#     # Serve your main site
+#     handle {
+#         root * /var/www/html
+#         file_server
+#     }
+# }

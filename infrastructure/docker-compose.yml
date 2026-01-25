@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: n8n
+    restart: always
+    ports:
+      - "127.0.0.1:5678:5678"  # Only accessible via Caddy reverse proxy
+    environment:
+      # Basic configuration
+      - N8N_HOST=${N8N_HOST}
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=https
+      - NODE_ENV=production
+
+      # Webhook URL (important for external triggers)
+      - WEBHOOK_URL=https://${N8N_HOST}/
+
+      # Security - Basic Auth
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_USER=${N8N_BASIC_AUTH_USER}
+      - N8N_BASIC_AUTH_PASSWORD=${N8N_BASIC_AUTH_PASSWORD}
+
+      # Timezone
+      - GENERIC_TIMEZONE=${TIMEZONE:-America/Los_Angeles}
+      - TZ=${TIMEZONE:-America/Los_Angeles}
+
+      # Execution settings (optimized for e2-micro 1GB RAM)
+      - EXECUTIONS_DATA_PRUNE=true
+      - EXECUTIONS_DATA_MAX_AGE=168
+      - N8N_METRICS=false
+
+      # Memory optimization for e2-micro
+      - N8N_SKIP_WEBHOOK_DEREGISTRATION_SHUTDOWN=true
+      - N8N_DEFAULT_BINARY_DATA_MODE=filesystem
+
+      # CORS for frontend integration
+      - N8N_CORS_ENABLED=${N8N_CORS_ENABLED:-false}
+      - N8N_CORS_ORIGIN=${N8N_CORS_ORIGIN:-*}
+
+    volumes:
+      - ./n8n_data:/home/node/.n8n
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:5678/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3

@@ -1,0 +1,25 @@
+# Environment files (contain secrets)
+.env
+*.env.local
+
+# n8n data (workflows should be exported as JSON instead)
+n8n_data/
+
+# Backups (too large for git)
+*-backups/
+*.tar.gz
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+
+# Logs
+*.log
+logs/

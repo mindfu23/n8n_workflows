@@ -1,0 +1,268 @@
+{
+  "name": "JobSearcher - Daily Tech Writer Job Search",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 14 * * 1-5"
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Daily Schedule (7am PT)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [0, 400],
+      "notes": "Runs Mon-Fri at 14:00 UTC (7:00 AM Pacific)"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "jobsearch-trigger",
+        "options": {
+          "responseMode": "responseNode"
+        }
+      },
+      "id": "webhook-manual",
+      "name": "Manual Trigger Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [0, 600],
+      "webhookId": "jobsearch-trigger"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Initialize search configuration\nconst today = new Date().toISOString().split('T')[0];\n\nconst searches = [\n  {\n    name: 'Greenhouse — AI/SaaS Tech Writer (SF Bay / Remote)',\n    query: 'site:boards.greenhouse.io \"Technical Writer\" \"AI\" \"SaaS\" (\"San Francisco\" OR \"San Francisco Bay Area\" OR \"remote\")',\n    platform: 'Greenhouse'\n  },\n  {\n    name: 'Ashby — AI Tech Writer (Series A)',\n    query: 'site:jobs.ashbyhq.com \"Technical Writer\" \"AI\" \"Series A\"',\n    platform: 'Ashby'\n  },\n  {\n    name: 'Lever — Startup Tech Writer (SF)',\n    query: 'site:lever.co \"Technical Writer\" \"Startup\" \"San Francisco\"',\n    platform: 'Lever'\n  },\n  {\n    name: 'Workable — AI Tech Writer',\n    query: 'site:workable.com \"Technical Writer\" \"AI\"',\n    platform: 'Workable'\n  },\n  {\n    name: 'Indeed — AI Tech Writer',\n    query: 'site:indeed.com \"Technical Writer\" \"AI\"',\n    platform: 'Indeed'\n  },\n  {\n    name: 'LinkedIn — AI Tech Writer',\n    query: 'site:linkedin.com/jobs \"Technical Writer\" \"AI\"',\n    platform: 'LinkedIn'\n  }\n];\n\n// Load previously seen jobs from workflow static data\nconst staticData = $getWorkflowStaticData('global');\nconst seenJobs = staticData.seenJobs || {}; // { url: { title, company, firstSeen, lastSeen } }\nconst previousResults = staticData.previousResults || []; // last run's results\nconst appliedJobs = staticData.appliedJobs || []; // URLs of jobs already applied to\n\nreturn {\n  json: {\n    today,\n    searches,\n    seenJobs,\n    previousResults,\n    appliedJobs,\n    previousCount: previousResults.length,\n    searchCount: searches.length\n  }\n};"
+      },
+      "id": "init-config",
+      "name": "Initialize Config",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Split searches into individual items for parallel execution\nconst config = $input.first().json;\n\nreturn config.searches.map(search => ({\n  json: {\n    ...search,\n    today: config.today,\n    seenJobs: config.seenJobs,\n    appliedJobs: config.appliedJobs\n  }\n}));"
+      },
+      "id": "split-searches",
+      "name": "Split Searches",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 500]
+    },
+    {
+      "parameters": {
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ contents: [{ parts: [{ text: `Execute this job search query and return structured results as a JSON array.\\n\\nSearch: ${$json.query}\\n\\nFor each job found, extract:\\n- title: exact job title\\n- company: company name\\n- location: city/remote/hybrid\\n- url: direct link to the job posting\\n- platform: ${$json.platform}\\n- description: 1-2 sentence summary\\n- datePosted: if visible, else null\\n- salary: if listed, else null\\n- isOpen: true if position appears to still be accepting applications\\n\\nReturn ONLY a valid JSON array, no markdown. Example:\\n[{\"title\": \"Technical Writer\", \"company\": \"Acme\", \"location\": \"Remote\", \"url\": \"https://...\", \"platform\": \"Greenhouse\", \"description\": \"...\", \"datePosted\": null, \"salary\": null, \"isOpen\": true}]\\n\\nIf no results found, return an empty array: []` }] }], tools: [{ google_search: {} }], generationConfig: { temperature: 0.1, maxOutputTokens: 4000 } }) }}",
+        "options": {
+          "timeout": 45000,
+          "batching": {
+            "batch": {
+              "batchSize": 2,
+              "batchInterval": 3000
+            }
+          }
+        }
+      },
+      "id": "search-jobs",
+      "name": "Gemini: Search Jobs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [660, 500],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse search results from all Gemini responses\nconst allItems = $input.all();\nconst configData = $('Initialize Config').first().json;\nconst seenJobs = configData.seenJobs || {};\nconst appliedJobs = configData.appliedJobs || [];\nconst previousResults = configData.previousResults || [];\nconst today = configData.today;\n\nlet allJobs = [];\nlet searchSummary = {};\nlet errors = [];\n\n// Parse each search result\nfor (let i = 0; i < allItems.length; i++) {\n  const item = allItems[i].json;\n  const searchInfo = configData.searches[i] || { platform: 'Unknown', name: 'Unknown' };\n  const platform = searchInfo.platform;\n\n  searchSummary[platform] = 0;\n\n  try {\n    let jobs = [];\n\n    if (item.candidates && item.candidates[0]) {\n      let text = item.candidates[0].content?.parts?.[0]?.text || '';\n      // Clean markdown code blocks\n      text = text.replace(/```json\\n?/g, '').replace(/```\\n?/g, '').trim();\n\n      // Try to parse JSON array\n      try {\n        jobs = JSON.parse(text);\n        if (!Array.isArray(jobs)) jobs = [jobs];\n      } catch (parseErr) {\n        // Try to extract JSON array from text\n        const arrayMatch = text.match(/\\[.*\\]/s);\n        if (arrayMatch) {\n          try {\n            jobs = JSON.parse(arrayMatch[0]);\n          } catch (e2) {\n            errors.push(`${platform}: Could not parse results`);\n          }\n        }\n      }\n    } else if (item.error) {\n      errors.push(`${platform}: API error - ${item.error}`);\n    }\n\n    // Filter to open positions and add platform\n    jobs = jobs\n      .filter(j => j && j.url && j.isOpen !== false)\n      .map(j => ({\n        ...j,\n        platform: platform,\n        url: j.url?.trim(),\n        title: j.title?.trim() || 'Unknown Title',\n        company: j.company?.trim() || 'Unknown Company'\n      }));\n\n    searchSummary[platform] = jobs.length;\n    allJobs = allJobs.concat(jobs);\n\n  } catch (e) {\n    errors.push(`${platform}: Processing error - ${e.message}`);\n  }\n}\n\n// ── DEDUPLICATION ──\n// Normalize URL for comparison\nconst normalizeUrl = (url) => {\n  if (!url) return '';\n  return url.toLowerCase()\n    .replace(/\\?.*$/, '')     // Remove query params\n    .replace(/\\/$/, '')       // Remove trailing slash\n    .replace(/^https?:\\/\\//, '') // Remove protocol\n    .replace(/^www\\./, '');   // Remove www\n};\n\n// Deduplicate by URL first\nconst urlMap = {};\nconst duplicateGroups = {};\n\nallJobs.forEach(job => {\n  const normUrl = normalizeUrl(job.url);\n  if (!urlMap[normUrl]) {\n    urlMap[normUrl] = job;\n  } else {\n    // Exact URL duplicate\n    if (!duplicateGroups[normUrl]) {\n      duplicateGroups[normUrl] = [urlMap[normUrl]];\n    }\n    duplicateGroups[normUrl].push(job);\n  }\n});\n\n// Deduplicate by company + similar title\nconst uniqueJobs = Object.values(urlMap);\nconst titleCompanyMap = {};\n\nuniqueJobs.forEach(job => {\n  const key = `${job.company.toLowerCase().replace(/[^a-z0-9]/g, '')}_${job.title.toLowerCase().replace(/[^a-z0-9]/g, '')}`;\n  if (!titleCompanyMap[key]) {\n    titleCompanyMap[key] = job;\n  } else {\n    const normUrl = normalizeUrl(job.url);\n    const existingUrl = normalizeUrl(titleCompanyMap[key].url);\n    if (normUrl !== existingUrl) {\n      if (!duplicateGroups[key]) {\n        duplicateGroups[key] = [titleCompanyMap[key]];\n      }\n      duplicateGroups[key].push(job);\n    }\n  }\n});\n\nconst deduplicatedJobs = Object.values(titleCompanyMap);\n\n// ── CLASSIFY: New vs Previously Seen ──\nconst previousUrls = new Set(previousResults.map(j => normalizeUrl(j.url)));\nconst appliedUrls = new Set(appliedJobs.map(u => normalizeUrl(u)));\n\nconst newJobs = [];\nconst previouslyFoundJobs = [];\nconst appliedFoundJobs = [];\n\ndeduplicatedJobs.forEach(job => {\n  const normUrl = normalizeUrl(job.url);\n\n  if (appliedUrls.has(normUrl)) {\n    appliedFoundJobs.push(job);\n  } else if (seenJobs[normUrl]) {\n    previouslyFoundJobs.push({ ...job, firstSeen: seenJobs[normUrl].firstSeen });\n  } else {\n    newJobs.push(job);\n  }\n});\n\n// ── REMOVED JOBS ── (in previous results but not found today)\nconst currentUrls = new Set(deduplicatedJobs.map(j => normalizeUrl(j.url)));\nconst removedJobs = previousResults.filter(j => !currentUrls.has(normalizeUrl(j.url)));\n\n// ── UPDATE SEEN JOBS ──\nconst updatedSeenJobs = { ...seenJobs };\ndeduplicatedJobs.forEach(job => {\n  const normUrl = normalizeUrl(job.url);\n  if (!updatedSeenJobs[normUrl]) {\n    updatedSeenJobs[normUrl] = {\n      title: job.title,\n      company: job.company,\n      firstSeen: today,\n      lastSeen: today\n    };\n  } else {\n    updatedSeenJobs[normUrl].lastSeen = today;\n  }\n});\n\nreturn {\n  json: {\n    today,\n    allJobs,\n    deduplicatedJobs,\n    newJobs,\n    previouslyFoundJobs,\n    appliedFoundJobs,\n    removedJobs,\n    duplicateGroups,\n    searchSummary,\n    errors,\n    stats: {\n      totalRaw: allJobs.length,\n      afterDedup: deduplicatedJobs.length,\n      newToday: newJobs.length,\n      previouslyFound: previouslyFoundJobs.length,\n      applied: appliedFoundJobs.length,\n      removedToday: removedJobs.length,\n      duplicatesDetected: Object.keys(duplicateGroups).length\n    },\n    updatedSeenJobs,\n    updatedPreviousResults: deduplicatedJobs\n  }\n};"
+      },
+      "id": "aggregate-dedup",
+      "name": "Aggregate & Deduplicate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [880, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build the formatted markdown report\nconst data = $input.first().json;\nconst { today, newJobs, previouslyFoundJobs, removedJobs, duplicateGroups, searchSummary, errors, stats, deduplicatedJobs } = data;\n\nconst formatJob = (job, index) => {\n  let entry = `### ${index}. ${job.title}\\n`;\n  entry += `**Company:** ${job.company}\\n`;\n  entry += `**Location:** ${job.location || 'Not specified'}\\n`;\n  entry += `**Platform:** ${job.platform}\\n`;\n  entry += `**URL:** ${job.url}\\n`;\n  if (job.salary) entry += `**Salary:** ${job.salary}\\n`;\n  if (job.datePosted) entry += `**Posted:** ${job.datePosted}\\n`;\n  entry += `${job.description || 'No description available.'}\\n`;\n  return entry;\n};\n\nlet report = `# Tech Writer Job Search Results\\n`;\nreport += `**Date:** ${today}\\n`;\nreport += `**Searches run:** ${Object.keys(searchSummary).length}\\n`;\nreport += `**Unique positions found:** ${stats.afterDedup}\\n`;\nreport += `**New today:** ${stats.newToday}\\n`;\nreport += `**Duplicates detected:** ${stats.duplicatesDetected}\\n\\n`;\n\n// New Positions\nreport += `## 🆕 New Positions\\n\\n`;\nif (newJobs.length === 0) {\n  report += `No new positions found today.\\n\\n`;\n} else {\n  newJobs.forEach((job, i) => {\n    report += formatJob(job, i + 1) + '\\n';\n  });\n}\n\n// Previously Found\nif (previouslyFoundJobs.length > 0) {\n  report += `## 📁 Previously Found (Still Active)\\n\\n`;\n  previouslyFoundJobs.forEach((job, i) => {\n    report += `${i + 1}. **${job.title}** at ${job.company} (${job.platform}) — first seen ${job.firstSeen}\\n`;\n    report += `   ${job.url}\\n\\n`;\n  });\n}\n\n// Duplicates\nreport += `## ⚠️ Duplicate Postings\\n\\n`;\nconst dupKeys = Object.keys(duplicateGroups);\nif (dupKeys.length === 0) {\n  report += `No duplicate postings detected.\\n\\n`;\n} else {\n  dupKeys.forEach((key, i) => {\n    const group = duplicateGroups[key];\n    report += `**Group ${i + 1}:** ${group[0].title} at ${group[0].company}\\n`;\n    group.forEach(job => {\n      report += `- ${job.platform}: ${job.url}\\n`;\n    });\n    report += `*Recommendation: Apply through ${group[0].platform} (direct ATS)*\\n\\n`;\n  });\n}\n\n// All Positions\nreport += `## 📋 All Positions (Deduplicated)\\n\\n`;\nif (deduplicatedJobs.length === 0) {\n  report += `No positions found today.\\n\\n`;\n} else {\n  deduplicatedJobs.forEach((job, i) => {\n    report += formatJob(job, i + 1) + '\\n';\n  });\n}\n\n// Removed\nreport += `## ❌ Removed Since Last Search\\n\\n`;\nif (removedJobs.length === 0) {\n  report += `No positions removed since last search.\\n\\n`;\n} else {\n  removedJobs.forEach((job, i) => {\n    report += `${i + 1}. ~~${job.title} at ${job.company}~~ (${job.platform})\\n`;\n  });\n  report += '\\n';\n}\n\n// Search Summary\nreport += `## 📊 Search Summary\\n\\n`;\nreport += `| Platform | Results |\\n`;\nreport += `|----------|---------|\\n`;\nObject.entries(searchSummary).forEach(([platform, count]) => {\n  report += `| ${platform} | ${count} |\\n`;\n});\nreport += `\\n`;\nreport += `**Total raw results:** ${stats.totalRaw}\\n`;\nreport += `**After deduplication:** ${stats.afterDedup}\\n`;\nreport += `**New today:** ${stats.newToday}\\n`;\nreport += `**Previously found (still active):** ${stats.previouslyFound}\\n`;\nreport += `**Removed today:** ${stats.removedToday}\\n`;\nreport += `**Applied jobs found:** ${stats.applied}\\n`;\n\nif (errors.length > 0) {\n  report += `\\n### ⚠️ Search Errors\\n\\n`;\n  errors.forEach(err => {\n    report += `- ${err}\\n`;\n  });\n}\n\nreport += `\\n---\\n*Generated by n8n JobSearcher workflow · ${today}*\\n`;\n\nreturn {\n  json: {\n    ...data,\n    report,\n    subject: `Tech Writer Job Search — ${today} — ${stats.afterDedup} positions (${stats.newToday} new)`\n  }\n};"
+      },
+      "id": "build-report",
+      "name": "Build Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Convert markdown report to styled HTML for email\nconst data = $input.first().json;\nlet html = data.report;\n\n// Convert markdown to HTML\n// Headers\nhtml = html.replace(/^### (.*$)/gm, '<h3 style=\"color:#333;margin:16px 0 8px 0;font-size:16px;\">$1</h3>');\nhtml = html.replace(/^## (.*$)/gm, '<h2 style=\"color:#1a5276;margin:24px 0 12px 0;border-bottom:2px solid #eee;padding-bottom:8px;font-size:18px;\">$1</h2>');\nhtml = html.replace(/^# (.*$)/gm, '<h1 style=\"color:#2c3e50;margin:0 0 16px 0;font-size:24px;\">$1</h1>');\n\n// Bold and italic\nhtml = html.replace(/\\*\\*(.*?)\\*\\*/g, '<strong>$1</strong>');\nhtml = html.replace(/\\*(.*?)\\*/g, '<em>$1</em>');\n\n// Strikethrough\nhtml = html.replace(/~~(.*?)~~/g, '<del style=\"color:#999;\">$1</del>');\n\n// Links\nhtml = html.replace(/\\[([^\\]]+)\\]\\(([^)]+)\\)/g, '<a href=\"$2\" style=\"color:#2980b9;\">$1</a>');\n\n// Plain URLs (not already in links)\nhtml = html.replace(/(?<!href=\")(https?:\\/\\/[^\\s<]+)/g, '<a href=\"$1\" style=\"color:#2980b9;\">$1</a>');\n\n// Tables\nhtml = html.replace(/\\|(.+)\\|\\n\\|[-| ]+\\|\\n((?:\\|.+\\|\\n?)*)/g, (match, header, body) => {\n  const headers = header.split('|').map(h => h.trim()).filter(Boolean);\n  let table = '<table style=\"border-collapse:collapse;width:100%;margin:12px 0;font-size:14px;\">';\n  table += '<tr>' + headers.map(h => `<th style=\"text-align:left;padding:8px;border-bottom:2px solid #ddd;background:#f0f4f8;\">${h}</th>`).join('') + '</tr>';\n\n  body.trim().split('\\n').forEach(row => {\n    const cells = row.split('|').map(c => c.trim()).filter(Boolean);\n    table += '<tr>' + cells.map(c => `<td style=\"padding:8px;border-bottom:1px solid #eee;\">${c}</td>`).join('') + '</tr>';\n  });\n\n  table += '</table>';\n  return table;\n});\n\n// List items\nhtml = html.replace(/^- (.*$)/gm, '<li style=\"margin:4px 0;\">$1</li>');\nhtml = html.replace(/((?:<li[^>]*>.*?<\\/li>\\n?)+)/g, '<ul style=\"padding-left:20px;margin:8px 0;\">$1</ul>');\n\n// Numbered list items\nhtml = html.replace(/^(\\d+)\\. (.*$)/gm, '<li style=\"margin:4px 0;\">$2</li>');\n\n// Horizontal rules\nhtml = html.replace(/^---$/gm, '<hr style=\"border:none;border-top:1px solid #eee;margin:24px 0 12px 0;\">');\n\n// Line breaks\nhtml = html.replace(/\\n(?!<)/g, '<br>');\n\n// Wrap in styled container\nconst styledHtml = `\n<div style=\"font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;\n            max-width: 700px; margin: 0 auto; color: #1a1a1a; padding: 20px;\n            background: white; line-height: 1.6;\">\n    ${html}\n</div>`;\n\nreturn {\n  json: {\n    ...data,\n    htmlReport: styledHtml\n  }\n};"
+      },
+      "id": "format-html",
+      "name": "Format HTML Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1320, 500]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.emailTo || '' }}",
+        "subject": "={{ $json.subject }}",
+        "emailType": "html",
+        "html": "={{ $json.htmlReport }}",
+        "options": {
+          "replyTo": ""
+        }
+      },
+      "id": "send-email",
+      "name": "Send Email (Gmail)",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [1540, 400],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "",
+          "name": "Gmail Account"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ contents: [{ parts: [{ text: 'Send email to: ' + ($json.emailTo || 'configured recipient') + '\\nSubject: ' + $json.subject + '\\nBody (HTML): ' + $json.htmlReport.substring(0, 200) + '...' }] }], generationConfig: { temperature: 0, maxOutputTokens: 50 } }) }}",
+        "options": { "timeout": 10000 }
+      },
+      "id": "smtp-fallback",
+      "name": "SMTP Fallback Note",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1540, 600],
+      "notes": "If Gmail OAuth not configured, use SMTP node (n8n-nodes-base.emailSend) with smtp.gmail.com:465 and Gmail App Password"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Save state for next run's deduplication\nconst data = $input.first().json;\n\n// Update workflow static data for next run\nconst staticData = $getWorkflowStaticData('global');\nstaticData.seenJobs = data.updatedSeenJobs;\nstaticData.previousResults = data.updatedPreviousResults;\n// appliedJobs must be updated manually or via separate webhook\nif (!staticData.appliedJobs) staticData.appliedJobs = [];\n\n// Clean up old seen jobs (older than 60 days)\nconst sixtyDaysAgo = new Date();\nsixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);\nconst cutoff = sixtyDaysAgo.toISOString().split('T')[0];\n\nObject.keys(staticData.seenJobs).forEach(url => {\n  if (staticData.seenJobs[url].lastSeen < cutoff) {\n    delete staticData.seenJobs[url];\n  }\n});\n\nreturn {\n  json: {\n    success: true,\n    date: data.today,\n    stats: data.stats,\n    emailSent: true,\n    seenJobsCount: Object.keys(staticData.seenJobs).length,\n    message: `Job search complete. ${data.stats.afterDedup} positions found (${data.stats.newToday} new).`\n  }\n};"
+      },
+      "id": "save-state",
+      "name": "Save State for Next Run",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1760, 500]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "respond-webhook",
+      "name": "Return Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1980, 600]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "jobsearch-applied",
+        "options": {}
+      },
+      "id": "webhook-applied",
+      "name": "Mark Job Applied",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [0, 850],
+      "webhookId": "jobsearch-applied"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Mark a job URL as applied so it won't show as 'new' in future reports\nconst body = $input.first().json.body || $input.first().json;\nconst url = body.url;\n\nif (!url) {\n  return { json: { success: false, error: 'URL is required' } };\n}\n\nconst staticData = $getWorkflowStaticData('global');\nif (!staticData.appliedJobs) staticData.appliedJobs = [];\n\nif (!staticData.appliedJobs.includes(url)) {\n  staticData.appliedJobs.push(url);\n}\n\nreturn {\n  json: {\n    success: true,\n    url,\n    totalApplied: staticData.appliedJobs.length,\n    message: `Marked as applied: ${url}`\n  }\n};"
+      },
+      "id": "save-applied",
+      "name": "Save Applied Job",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 850]
+    },
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "jobsearch-status",
+        "options": {}
+      },
+      "id": "webhook-status",
+      "name": "Status Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [0, 1050],
+      "webhookId": "jobsearch-status"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Return current state / stats\nconst staticData = $getWorkflowStaticData('global');\nconst seenJobs = staticData.seenJobs || {};\nconst previousResults = staticData.previousResults || [];\nconst appliedJobs = staticData.appliedJobs || [];\n\nreturn {\n  json: {\n    status: 'ok',\n    seenJobsCount: Object.keys(seenJobs).length,\n    lastRunPositions: previousResults.length,\n    appliedJobsCount: appliedJobs.length,\n    lastRunJobs: previousResults.map(j => ({\n      title: j.title,\n      company: j.company,\n      platform: j.platform,\n      url: j.url\n    })),\n    appliedUrls: appliedJobs\n  }\n};"
+      },
+      "id": "get-status",
+      "name": "Get Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 1050]
+    }
+  ],
+  "connections": {
+    "Daily Schedule (7am PT)": {
+      "main": [[{ "node": "Initialize Config", "type": "main", "index": 0 }]]
+    },
+    "Manual Trigger Webhook": {
+      "main": [[{ "node": "Initialize Config", "type": "main", "index": 0 }]]
+    },
+    "Initialize Config": {
+      "main": [[{ "node": "Split Searches", "type": "main", "index": 0 }]]
+    },
+    "Split Searches": {
+      "main": [[{ "node": "Gemini: Search Jobs", "type": "main", "index": 0 }]]
+    },
+    "Gemini: Search Jobs": {
+      "main": [[{ "node": "Aggregate & Deduplicate", "type": "main", "index": 0 }]]
+    },
+    "Aggregate & Deduplicate": {
+      "main": [[{ "node": "Build Report", "type": "main", "index": 0 }]]
+    },
+    "Build Report": {
+      "main": [[{ "node": "Format HTML Email", "type": "main", "index": 0 }]]
+    },
+    "Format HTML Email": {
+      "main": [
+        [
+          { "node": "Send Email (Gmail)", "type": "main", "index": 0 },
+          { "node": "Save State for Next Run", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Send Email (Gmail)": {
+      "main": [[]]
+    },
+    "Save State for Next Run": {
+      "main": [[{ "node": "Return Response", "type": "main", "index": 0 }]]
+    },
+    "Mark Job Applied": {
+      "main": [[{ "node": "Save Applied Job", "type": "main", "index": 0 }]]
+    },
+    "Status Webhook": {
+      "main": [[{ "node": "Get Status", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": []
+}

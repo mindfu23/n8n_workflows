@@ -1,0 +1,554 @@
+{
+  "name": "Novel Orchestration - Multi-LLM Writing Pipeline",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "novel-orchestrator",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Start Novel Project",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 300],
+      "webhookId": "novel-orchestrator"
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "manualTriggerData": "{\"concept\": \"A detective in 1920s Chicago investigates a series of murders connected to jazz clubs and prohibition bootleggers\", \"genre\": \"noir mystery\", \"targetChapters\": 3, \"tone\": \"hardboiled\"}"
+      },
+      "id": "manual-trigger",
+      "name": "Manual Test Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [0, 100],
+      "notes": "Use this for testing. Edit manualTriggerData with your concept."
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {"name": "concept", "value": "={{ $json.body?.concept || $json.concept || 'A story about...' }}"},
+            {"name": "genre", "value": "={{ $json.body?.genre || $json.genre || 'literary fiction' }}"},
+            {"name": "tone", "value": "={{ $json.body?.tone || $json.tone || 'engaging' }}"},
+            {"name": "targetChapters", "value": "={{ $json.body?.targetChapters || $json.targetChapters || 5 }}"},
+            {"name": "currentChapter", "value": "1"},
+            {"name": "status", "value": "planning"}
+          ]
+        },
+        "options": {}
+      },
+      "id": "init-state",
+      "name": "Initialize Project State",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [220, 200]
+    },
+    {
+      "parameters": {
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'gpt-4-turbo-preview', messages: [{ role: 'system', content: 'You are a master story architect. Create detailed, compelling plot structures.' }, { role: 'user', content: `Create a detailed plot outline for a ${$json.genre} novel with the following concept:\\n\\n${$json.concept}\\n\\nTone: ${$json.tone}\\nTarget chapters: ${$json.targetChapters}\\n\\nProvide:\\n1. Three-act structure breakdown\\n2. Major plot points (inciting incident, midpoint, climax, resolution)\\n3. Chapter-by-chapter outline with key scenes\\n4. Subplots and how they weave into main plot\\n\\nFormat as structured JSON with keys: acts, plotPoints, chapters, subplots` }], temperature: 0.7, max_tokens: 4000 }) }}",
+        "options": {}
+      },
+      "id": "chatgpt-plot-outline",
+      "name": "ChatGPT: Plot Outline",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [500, 100],
+      "notes": "ChatGPT excels at logical plot structure and world-building"
+    },
+    {
+      "parameters": {
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {"name": "x-api-key", "value": "={{ $credentials.httpHeaderAuth.value }}"},
+            {"name": "anthropic-version", "value": "2023-06-01"},
+            {"name": "content-type", "value": "application/json"}
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 4000, messages: [{ role: 'user', content: `Based on this story concept, create detailed character profiles:\\n\\nConcept: ${$('Initialize Project State').item.json.concept}\\nGenre: ${$('Initialize Project State').item.json.genre}\\n\\nFor each major character provide:\\n1. Full name and physical description\\n2. Background and backstory\\n3. Core motivation and desires\\n4. Fears and flaws\\n5. Character arc (how they change)\\n6. Voice/speech patterns\\n7. Key relationships\\n\\nCreate 3-5 major characters and 2-3 supporting characters. Format as JSON.` }] }) }}",
+        "options": {}
+      },
+      "id": "claude-characters",
+      "name": "Claude: Character Development",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [500, 300],
+      "notes": "Claude excels at nuanced character psychology and dialogue voice"
+    },
+    {
+      "parameters": {
+        "url": "https://api.perplexity.ai/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {"name": "Authorization", "value": "Bearer {{ $credentials.httpHeaderAuth.value }}"},
+            {"name": "content-type", "value": "application/json"}
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'llama-3.1-sonar-large-128k-online', messages: [{ role: 'system', content: 'You are a research assistant helping an author with accurate historical and factual details for their novel.' }, { role: 'user', content: `Research the following for a ${$('Initialize Project State').item.json.genre} novel:\\n\\nConcept: ${$('Initialize Project State').item.json.concept}\\n\\nProvide:\\n1. Historical context and accurate period details\\n2. Setting-specific information (locations, culture, customs)\\n3. Technical details relevant to the plot\\n4. Common misconceptions to avoid\\n5. Authentic dialogue/slang for the era\\n6. Sources for further research\\n\\nBe specific and cite sources where possible.` }], max_tokens: 2000 }) }}",
+        "options": {}
+      },
+      "id": "perplexity-research",
+      "name": "Perplexity: Research & Facts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [500, 500],
+      "notes": "Perplexity provides accurate research with citations"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Aggregate planning outputs from all LLMs\nconst plotData = $('ChatGPT: Plot Outline').item.json;\nconst characterData = $('Claude: Character Development').item.json;\nconst researchData = $('Perplexity: Research & Facts').item.json;\nconst projectState = $('Initialize Project State').item.json;\n\n// Parse responses\nlet plotOutline = {};\nlet characters = {};\nlet research = {};\n\ntry {\n  if (plotData.choices && plotData.choices[0]) {\n    const content = plotData.choices[0].message.content;\n    // Try to extract JSON from response\n    const jsonMatch = content.match(/\\{[\\s\\S]*\\}/);\n    plotOutline = jsonMatch ? JSON.parse(jsonMatch[0]) : { raw: content };\n  }\n} catch (e) {\n  plotOutline = { raw: plotData.choices?.[0]?.message?.content || 'Parse error' };\n}\n\ntry {\n  if (characterData.content && characterData.content[0]) {\n    const content = characterData.content[0].text;\n    const jsonMatch = content.match(/\\{[\\s\\S]*\\}/);\n    characters = jsonMatch ? JSON.parse(jsonMatch[0]) : { raw: content };\n  }\n} catch (e) {\n  characters = { raw: characterData.content?.[0]?.text || 'Parse error' };\n}\n\ntry {\n  if (researchData.choices && researchData.choices[0]) {\n    research = { content: researchData.choices[0].message.content };\n  }\n} catch (e) {\n  research = { raw: 'Research parse error' };\n}\n\nreturn {\n  json: {\n    ...projectState,\n    status: 'planning_complete',\n    planning: {\n      plotOutline,\n      characters,\n      research,\n      completedAt: new Date().toISOString()\n    }\n  }\n};"
+      },
+      "id": "aggregate-planning",
+      "name": "Aggregate Planning Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [780, 300]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": { "__rl": true, "mode": "id", "value": "={{ $env.NOVEL_TRACKING_SHEET_ID || '1your-google-sheet-id-here' }}" },
+        "sheetName": { "__rl": true, "mode": "name", "value": "Projects" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Project ID": "={{ $now.format('yyyyMMdd-HHmmss') }}",
+            "Concept": "={{ $json.concept }}",
+            "Genre": "={{ $json.genre }}",
+            "Status": "={{ $json.status }}",
+            "Target Chapters": "={{ $json.targetChapters }}",
+            "Created At": "={{ $now.toISO() }}",
+            "Planning Data": "={{ JSON.stringify($json.planning).substring(0, 50000) }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "save-to-sheets",
+      "name": "Save Project to Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [1000, 300],
+      "notes": "Tracks project state in Google Sheets"
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {"name": "status", "value": "drafting"},
+            {"name": "currentChapter", "value": "1"}
+          ]
+        },
+        "options": {}
+      },
+      "id": "start-drafting",
+      "name": "Start Drafting Phase",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [1220, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {"name": "x-api-key", "value": "={{ $credentials.httpHeaderAuth.value }}"},
+            {"name": "anthropic-version", "value": "2023-06-01"},
+            {"name": "content-type", "value": "application/json"}
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 8000, messages: [{ role: 'user', content: `You are writing Chapter ${$json.currentChapter} of a ${$json.genre} novel.\\n\\n## Story Concept\\n${$json.concept}\\n\\n## Tone\\n${$json.tone}\\n\\n## Planning Context\\nPlot Outline: ${JSON.stringify($json.planning?.plotOutline || {}).substring(0, 3000)}\\n\\nCharacters: ${JSON.stringify($json.planning?.characters || {}).substring(0, 3000)}\\n\\nResearch Notes: ${JSON.stringify($json.planning?.research || {}).substring(0, 2000)}\\n\\n## Instructions\\nWrite Chapter ${$json.currentChapter} with:\\n- Strong scene-setting and sensory details\\n- Character-authentic dialogue\\n- Proper pacing and tension\\n- Connection to the overall plot arc\\n- Approximately 2000-3000 words\\n\\nBegin the chapter now:` }] }) }}",
+        "options": {}
+      },
+      "id": "claude-write-chapter",
+      "name": "Claude: Write Chapter Draft",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1500, 200],
+      "notes": "Claude writes the initial chapter draft"
+    },
+    {
+      "parameters": {
+        "url": "https://api.x.ai/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {"name": "Authorization", "value": "Bearer {{ $credentials.httpHeaderAuth.value }}"},
+            {"name": "content-type", "value": "application/json"}
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'grok-2-latest', messages: [{ role: 'system', content: 'You are a creative writing enhancer. Your job is to add creative flourishes, unexpected turns, witty dialogue, and memorable moments to existing prose. Keep the core story intact but make it more vibrant and engaging.' }, { role: 'user', content: `Review this chapter draft and suggest 3-5 creative enhancements. These could be:\\n- A memorable metaphor or image\\n- A witty dialogue exchange\\n- An unexpected but fitting detail\\n- A moment of dark humor or irony\\n- A sensory detail that brings a scene to life\\n\\nChapter Draft:\\n${$('Claude: Write Chapter Draft').item.json.content?.[0]?.text?.substring(0, 6000) || 'No draft available'}\\n\\nProvide your suggestions as a JSON array with keys: location (where in the chapter), type (metaphor/dialogue/detail/humor/sensory), original (brief quote of original), enhancement (your suggested addition/change), reasoning (why this improves the chapter)` }], temperature: 0.9, max_tokens: 2000 }) }}",
+        "options": {}
+      },
+      "id": "grok-creative",
+      "name": "Grok: Creative Enhancements",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1500, 400],
+      "notes": "Grok adds creative flourishes and unexpected elements (optional)"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Combine chapter draft with creative suggestions\nconst projectState = $('Start Drafting Phase').item.json;\nconst claudeDraft = $('Claude: Write Chapter Draft').item.json;\nconst grokSuggestions = $('Grok: Creative Enhancements').item.json;\n\nlet chapterText = '';\nlet suggestions = [];\n\n// Extract Claude's chapter text\nif (claudeDraft.content && claudeDraft.content[0]) {\n  chapterText = claudeDraft.content[0].text;\n}\n\n// Extract Grok's suggestions\ntry {\n  if (grokSuggestions.choices && grokSuggestions.choices[0]) {\n    const content = grokSuggestions.choices[0].message.content;\n    const jsonMatch = content.match(/\\[[\\s\\S]*\\]/);\n    suggestions = jsonMatch ? JSON.parse(jsonMatch[0]) : [];\n  }\n} catch (e) {\n  suggestions = [{ note: 'Could not parse Grok suggestions' }];\n}\n\nreturn {\n  json: {\n    ...projectState,\n    currentChapterDraft: {\n      chapterNumber: parseInt(projectState.currentChapter),\n      text: chapterText,\n      wordCount: chapterText.split(/\\s+/).length,\n      creativeSuggestions: suggestions,\n      draftedAt: new Date().toISOString()\n    }\n  }\n};"
+      },
+      "id": "combine-draft",
+      "name": "Combine Draft & Suggestions",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1780, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ contents: [{ parts: [{ text: `You are a developmental editor analyzing a chapter draft. Provide comprehensive feedback.\\n\\n## Chapter ${$json.currentChapterDraft.chapterNumber} Draft\\n${$json.currentChapterDraft.text.substring(0, 25000)}\\n\\n## Analysis Required\\n1. PACING: Is the chapter well-paced? Where does it drag or rush?\\n2. CHARACTER: Do characters feel authentic? Is dialogue natural?\\n3. PLOT: Does this chapter advance the story effectively?\\n4. THEMES: What themes emerge? Are they handled well?\\n5. PROSE: Quality of the writing - strengths and areas for improvement\\n6. HOOKS: Does it have a strong opening? Compelling ending?\\n\\nProvide specific, actionable feedback. Format as JSON with keys: pacing, character, plot, themes, prose, hooks, overallScore (1-10), priorityRevisions (array of top 3 things to fix)` }] }], generationConfig: { temperature: 0.3, maxOutputTokens: 3000 } }) }}",
+        "options": {}
+      },
+      "id": "gemini-review",
+      "name": "Gemini: Comprehensive Review",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [2060, 100],
+      "notes": "Gemini's long context is ideal for full chapter analysis"
+    },
+    {
+      "parameters": {
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'gpt-4-turbo-preview', messages: [{ role: 'system', content: 'You are a continuity editor checking for plot consistency and logical coherence.' }, { role: 'user', content: `Check this chapter for consistency issues:\\n\\nChapter ${$json.currentChapterDraft.chapterNumber}:\\n${$json.currentChapterDraft.text.substring(0, 8000)}\\n\\nPlot Outline Context:\\n${JSON.stringify($json.planning?.plotOutline || {}).substring(0, 2000)}\\n\\nIdentify:\\n1. Timeline inconsistencies\\n2. Character behavior contradictions\\n3. Setting/world-building errors\\n4. Plot holes or logic gaps\\n5. Dropped threads or forgotten elements\\n\\nFormat as JSON: { issues: [{ type, description, severity (high/medium/low), suggestedFix }], consistencyScore: 1-10 }` }], temperature: 0.2, max_tokens: 2000 }) }}",
+        "options": {}
+      },
+      "id": "chatgpt-consistency",
+      "name": "ChatGPT: Consistency Check",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [2060, 300],
+      "notes": "ChatGPT checks plot logic and consistency"
+    },
+    {
+      "parameters": {
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {"name": "x-api-key", "value": "={{ $credentials.httpHeaderAuth.value }}"},
+            {"name": "anthropic-version", "value": "2023-06-01"},
+            {"name": "content-type", "value": "application/json"}
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 3000, messages: [{ role: 'user', content: `Perform a line-level edit review of this chapter. Focus on prose quality.\\n\\nChapter ${$json.currentChapterDraft.chapterNumber}:\\n${$json.currentChapterDraft.text.substring(0, 10000)}\\n\\nIdentify:\\n1. Overused words or phrases\\n2. Passive voice that should be active\\n3. Weak verbs that could be stronger\\n4. Adverb overuse\\n5. Telling vs showing opportunities\\n6. Dialogue attribution issues\\n7. Rhythm and flow problems\\n\\nProvide specific examples with suggested improvements. Format as JSON: { lineEdits: [{ original, suggested, reason }], proseStrengths: [], overallProseScore: 1-10 }` }] }) }}",
+        "options": {}
+      },
+      "id": "claude-line-edit",
+      "name": "Claude: Line Editing",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [2060, 500],
+      "notes": "Claude catches prose-level issues"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Aggregate all review feedback\nconst projectState = $('Combine Draft & Suggestions').item.json;\nconst geminiReview = $('Gemini: Comprehensive Review').item.json;\nconst chatgptConsistency = $('ChatGPT: Consistency Check').item.json;\nconst claudeLineEdit = $('Claude: Line Editing').item.json;\n\nlet developmentalFeedback = {};\nlet consistencyFeedback = {};\nlet lineEditFeedback = {};\n\n// Parse Gemini\ntry {\n  if (geminiReview.candidates && geminiReview.candidates[0]) {\n    const text = geminiReview.candidates[0].content.parts[0].text;\n    const jsonMatch = text.match(/\\{[\\s\\S]*\\}/);\n    developmentalFeedback = jsonMatch ? JSON.parse(jsonMatch[0]) : { raw: text };\n  }\n} catch (e) {\n  developmentalFeedback = { error: 'Parse error', raw: geminiReview };\n}\n\n// Parse ChatGPT\ntry {\n  if (chatgptConsistency.choices && chatgptConsistency.choices[0]) {\n    const text = chatgptConsistency.choices[0].message.content;\n    const jsonMatch = text.match(/\\{[\\s\\S]*\\}/);\n    consistencyFeedback = jsonMatch ? JSON.parse(jsonMatch[0]) : { raw: text };\n  }\n} catch (e) {\n  consistencyFeedback = { error: 'Parse error' };\n}\n\n// Parse Claude\ntry {\n  if (claudeLineEdit.content && claudeLineEdit.content[0]) {\n    const text = claudeLineEdit.content[0].text;\n    const jsonMatch = text.match(/\\{[\\s\\S]*\\}/);\n    lineEditFeedback = jsonMatch ? JSON.parse(jsonMatch[0]) : { raw: text };\n  }\n} catch (e) {\n  lineEditFeedback = { error: 'Parse error' };\n}\n\n// Calculate average score\nconst scores = [\n  developmentalFeedback.overallScore,\n  consistencyFeedback.consistencyScore,\n  lineEditFeedback.overallProseScore\n].filter(s => typeof s === 'number');\n\nconst avgScore = scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : 5;\n\nreturn {\n  json: {\n    ...projectState,\n    review: {\n      developmental: developmentalFeedback,\n      consistency: consistencyFeedback,\n      lineEdit: lineEditFeedback,\n      averageScore: avgScore.toFixed(1),\n      needsRevision: avgScore < 7,\n      reviewedAt: new Date().toISOString()\n    }\n  }\n};"
+      },
+      "id": "aggregate-reviews",
+      "name": "Aggregate Review Feedback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2340, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.review.needsRevision }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "check-needs-revision",
+      "name": "Needs Revision?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [2560, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {"name": "x-api-key", "value": "={{ $credentials.httpHeaderAuth.value }}"},
+            {"name": "anthropic-version", "value": "2023-06-01"},
+            {"name": "content-type", "value": "application/json"}
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 8000, messages: [{ role: 'user', content: `Revise this chapter based on editor feedback.\\n\\n## Original Chapter\\n${$json.currentChapterDraft.text.substring(0, 12000)}\\n\\n## Developmental Feedback\\n${JSON.stringify($json.review.developmental).substring(0, 2000)}\\n\\n## Consistency Issues\\n${JSON.stringify($json.review.consistency).substring(0, 1500)}\\n\\n## Line Edit Suggestions\\n${JSON.stringify($json.review.lineEdit).substring(0, 2000)}\\n\\n## Creative Enhancement Ideas\\n${JSON.stringify($json.currentChapterDraft.creativeSuggestions || []).substring(0, 1000)}\\n\\n## Instructions\\nRewrite the chapter addressing the feedback. Prioritize:\\n1. High-severity consistency issues\\n2. Pacing problems\\n3. Character authenticity\\n4. Incorporate relevant creative enhancements\\n\\nWrite the complete revised chapter:` }] }) }}",
+        "options": {}
+      },
+      "id": "claude-revise",
+      "name": "Claude: Apply Revisions",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [2840, 200],
+      "notes": "Claude revises based on aggregated feedback"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Update chapter with revision\nconst projectState = $('Aggregate Review Feedback').item.json;\nconst revision = $('Claude: Apply Revisions').item.json;\n\nlet revisedText = '';\nif (revision.content && revision.content[0]) {\n  revisedText = revision.content[0].text;\n}\n\n// Track revision iteration\nconst revisionCount = (projectState.currentChapterDraft.revisionCount || 0) + 1;\n\nreturn {\n  json: {\n    ...projectState,\n    currentChapterDraft: {\n      ...projectState.currentChapterDraft,\n      text: revisedText,\n      wordCount: revisedText.split(/\\s+/).length,\n      revisionCount: revisionCount,\n      lastRevisedAt: new Date().toISOString()\n    },\n    review: {\n      ...projectState.review,\n      needsRevision: revisionCount < 3  // Max 3 revision cycles\n    }\n  }\n};"
+      },
+      "id": "update-revision",
+      "name": "Update Chapter Draft",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3060, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Finalize the current chapter\nconst projectState = $('Aggregate Review Feedback').item.json;\n\n// Store completed chapter\nconst chapters = projectState.completedChapters || [];\nchapters.push({\n  number: parseInt(projectState.currentChapter),\n  text: projectState.currentChapterDraft.text,\n  wordCount: projectState.currentChapterDraft.wordCount,\n  finalScore: projectState.review.averageScore,\n  completedAt: new Date().toISOString()\n});\n\nconst currentChapter = parseInt(projectState.currentChapter);\nconst targetChapters = parseInt(projectState.targetChapters);\n\nreturn {\n  json: {\n    ...projectState,\n    completedChapters: chapters,\n    currentChapter: (currentChapter + 1).toString(),\n    status: currentChapter >= targetChapters ? 'complete' : 'drafting'\n  }\n};"
+      },
+      "id": "finalize-chapter",
+      "name": "Finalize Chapter",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2840, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.status }}",
+              "value2": "complete"
+            }
+          ]
+        }
+      },
+      "id": "check-all-done",
+      "name": "All Chapters Done?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [3060, 400]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": { "__rl": true, "mode": "id", "value": "={{ $env.NOVEL_TRACKING_SHEET_ID || '1your-google-sheet-id-here' }}" },
+        "sheetName": { "__rl": true, "mode": "name", "value": "Chapters" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Chapter Number": "={{ $json.currentChapterDraft.chapterNumber }}",
+            "Word Count": "={{ $json.currentChapterDraft.wordCount }}",
+            "Final Score": "={{ $json.review.averageScore }}",
+            "Revision Count": "={{ $json.currentChapterDraft.revisionCount || 1 }}",
+            "Completed At": "={{ $now.toISO() }}",
+            "Chapter Text": "={{ $json.currentChapterDraft.text.substring(0, 50000) }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "save-chapter",
+      "name": "Save Chapter to Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [3280, 500],
+      "notes": "Saves each completed chapter"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Compile all chapters into final manuscript\nconst projectState = $('Finalize Chapter').item.json;\n\nconst chapters = projectState.completedChapters || [];\n\n// Build manuscript\nlet manuscript = `# ${projectState.concept.substring(0, 100)}\\n`;\nmanuscript += `## A ${projectState.genre} Novel\\n\\n`;\nmanuscript += `---\\n\\n`;\n\nfor (const chapter of chapters.sort((a, b) => a.number - b.number)) {\n  manuscript += `# Chapter ${chapter.number}\\n\\n`;\n  manuscript += chapter.text;\n  manuscript += `\\n\\n---\\n\\n`;\n}\n\nconst totalWords = chapters.reduce((sum, ch) => sum + ch.wordCount, 0);\nconst avgScore = chapters.reduce((sum, ch) => sum + parseFloat(ch.finalScore), 0) / chapters.length;\n\nreturn {\n  json: {\n    ...projectState,\n    manuscript: manuscript,\n    summary: {\n      totalChapters: chapters.length,\n      totalWords: totalWords,\n      averageScore: avgScore.toFixed(1),\n      completedAt: new Date().toISOString()\n    }\n  }\n};"
+      },
+      "id": "compile-manuscript",
+      "name": "Compile Full Manuscript",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3280, 300]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": { "__rl": true, "mode": "id", "value": "={{ $env.NOVEL_OUTPUT_DOC_ID || '1your-google-doc-id-here' }}" },
+        "text": "={{ $json.manuscript }}",
+        "options": {}
+      },
+      "id": "export-to-docs",
+      "name": "Export to Google Docs",
+      "type": "n8n-nodes-base.googleDocs",
+      "typeVersion": 1,
+      "position": [3500, 300],
+      "notes": "Exports final manuscript to Google Docs"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true, message: 'Novel draft complete!', summary: $json.summary, manuscriptPreview: $json.manuscript.substring(0, 500) + '...' }) }}",
+        "options": {}
+      },
+      "id": "webhook-response",
+      "name": "Return Success Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [3720, 300]
+    },
+    {
+      "parameters": {},
+      "id": "noop-loop-back",
+      "name": "Continue to Next Chapter",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [3280, 600],
+      "notes": "Loop back to draft next chapter"
+    }
+  ],
+  "connections": {
+    "Start Novel Project": {
+      "main": [[{ "node": "Initialize Project State", "type": "main", "index": 0 }]]
+    },
+    "Manual Test Trigger": {
+      "main": [[{ "node": "Initialize Project State", "type": "main", "index": 0 }]]
+    },
+    "Initialize Project State": {
+      "main": [[
+        { "node": "ChatGPT: Plot Outline", "type": "main", "index": 0 },
+        { "node": "Claude: Character Development", "type": "main", "index": 0 },
+        { "node": "Perplexity: Research & Facts", "type": "main", "index": 0 }
+      ]]
+    },
+    "ChatGPT: Plot Outline": {
+      "main": [[{ "node": "Aggregate Planning Data", "type": "main", "index": 0 }]]
+    },
+    "Claude: Character Development": {
+      "main": [[{ "node": "Aggregate Planning Data", "type": "main", "index": 0 }]]
+    },
+    "Perplexity: Research & Facts": {
+      "main": [[{ "node": "Aggregate Planning Data", "type": "main", "index": 0 }]]
+    },
+    "Aggregate Planning Data": {
+      "main": [[{ "node": "Save Project to Sheets", "type": "main", "index": 0 }]]
+    },
+    "Save Project to Sheets": {
+      "main": [[{ "node": "Start Drafting Phase", "type": "main", "index": 0 }]]
+    },
+    "Start Drafting Phase": {
+      "main": [[
+        { "node": "Claude: Write Chapter Draft", "type": "main", "index": 0 },
+        { "node": "Grok: Creative Enhancements", "type": "main", "index": 0 }
+      ]]
+    },
+    "Claude: Write Chapter Draft": {
+      "main": [[{ "node": "Combine Draft & Suggestions", "type": "main", "index": 0 }]]
+    },
+    "Grok: Creative Enhancements": {
+      "main": [[{ "node": "Combine Draft & Suggestions", "type": "main", "index": 0 }]]
+    },
+    "Combine Draft & Suggestions": {
+      "main": [[
+        { "node": "Gemini: Comprehensive Review", "type": "main", "index": 0 },
+        { "node": "ChatGPT: Consistency Check", "type": "main", "index": 0 },
+        { "node": "Claude: Line Editing", "type": "main", "index": 0 }
+      ]]
+    },
+    "Gemini: Comprehensive Review": {
+      "main": [[{ "node": "Aggregate Review Feedback", "type": "main", "index": 0 }]]
+    },
+    "ChatGPT: Consistency Check": {
+      "main": [[{ "node": "Aggregate Review Feedback", "type": "main", "index": 0 }]]
+    },
+    "Claude: Line Editing": {
+      "main": [[{ "node": "Aggregate Review Feedback", "type": "main", "index": 0 }]]
+    },
+    "Aggregate Review Feedback": {
+      "main": [[{ "node": "Needs Revision?", "type": "main", "index": 0 }]]
+    },
+    "Needs Revision?": {
+      "main": [
+        [{ "node": "Claude: Apply Revisions", "type": "main", "index": 0 }],
+        [{ "node": "Finalize Chapter", "type": "main", "index": 0 }]
+      ]
+    },
+    "Claude: Apply Revisions": {
+      "main": [[{ "node": "Update Chapter Draft", "type": "main", "index": 0 }]]
+    },
+    "Update Chapter Draft": {
+      "main": [[
+        { "node": "Gemini: Comprehensive Review", "type": "main", "index": 0 },
+        { "node": "ChatGPT: Consistency Check", "type": "main", "index": 0 },
+        { "node": "Claude: Line Editing", "type": "main", "index": 0 }
+      ]]
+    },
+    "Finalize Chapter": {
+      "main": [[{ "node": "All Chapters Done?", "type": "main", "index": 0 }]]
+    },
+    "All Chapters Done?": {
+      "main": [
+        [{ "node": "Compile Full Manuscript", "type": "main", "index": 0 }],
+        [{ "node": "Save Chapter to Sheets", "type": "main", "index": 0 }]
+      ]
+    },
+    "Save Chapter to Sheets": {
+      "main": [[{ "node": "Continue to Next Chapter", "type": "main", "index": 0 }]]
+    },
+    "Continue to Next Chapter": {
+      "main": [[{ "node": "Start Drafting Phase", "type": "main", "index": 0 }]]
+    },
+    "Compile Full Manuscript": {
+      "main": [[{ "node": "Export to Google Docs", "type": "main", "index": 0 }]]
+    },
+    "Export to Google Docs": {
+      "main": [[{ "node": "Return Success Response", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    { "name": "novel-writing" },
+    { "name": "multi-llm" },
+    { "name": "orchestration" }
+  ],
+  "pinData": {},
+  "versionId": "1"
+}

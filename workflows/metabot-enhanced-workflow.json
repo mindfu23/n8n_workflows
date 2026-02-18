@@ -1,0 +1,516 @@
+{
+  "name": "Metabot Enhanced - Multi-LLM Aggregator",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "metabot-query",
+        "options": {
+          "responseMode": "responseNode"
+        }
+      },
+      "id": "webhook-query",
+      "name": "Query Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 300],
+      "webhookId": "metabot-query",
+      "notes": "POST { query, engines?, synthesisEngine?, options? }"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse and validate incoming request\nconst body = $input.first().json.body || $input.first().json;\n\nconst query = body.query;\nif (!query || query.trim().length === 0) {\n  throw new Error('Query is required');\n}\n\n// Default engines if not specified\nconst requestedEngines = body.engines || ['openai', 'anthropic', 'gemini', 'perplexity'];\n\n// Query classification for smart routing\nconst queryLower = query.toLowerCase();\nlet queryType = 'general';\nlet recommendedEngines = requestedEngines;\n\n// Classify query type\nif (queryLower.includes('current') || queryLower.includes('latest') || queryLower.includes('news') || queryLower.includes('today') || queryLower.includes('2024') || queryLower.includes('2025')) {\n  queryType = 'realtime';\n  // Prioritize Perplexity for real-time queries\n  if (!recommendedEngines.includes('perplexity')) {\n    recommendedEngines.unshift('perplexity');\n  }\n}\n\nif (queryLower.includes('code') || queryLower.includes('programming') || queryLower.includes('function') || queryLower.includes('algorithm')) {\n  queryType = 'technical';\n}\n\nif (queryLower.includes('creative') || queryLower.includes('story') || queryLower.includes('write') || queryLower.includes('poem')) {\n  queryType = 'creative';\n}\n\nif (queryLower.includes('analyze') || queryLower.includes('compare') || queryLower.includes('pros and cons')) {\n  queryType = 'analytical';\n}\n\nreturn {\n  json: {\n    query: query.trim(),\n    queryType,\n    engines: recommendedEngines,\n    synthesisEngine: body.synthesisEngine || 'gemini',\n    options: {\n      maxTokens: body.options?.maxTokens || 2000,\n      temperature: body.options?.temperature || 0.7,\n      enableCritique: body.options?.enableCritique || false,\n      critiqueRounds: body.options?.critiqueRounds || 1,\n      timeout: body.options?.timeout || 30000\n    },\n    requestId: `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,\n    startTime: Date.now()\n  }\n};"
+      },
+      "id": "parse-request",
+      "name": "Parse & Classify Query",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.engines.includes('openai') }}",
+              "value2": "true"
+            }
+          ]
+        }
+      },
+      "id": "check-openai",
+      "name": "OpenAI Enabled?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [440, 100]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.engines.includes('anthropic') }}",
+              "value2": "true"
+            }
+          ]
+        }
+      },
+      "id": "check-anthropic",
+      "name": "Claude Enabled?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.engines.includes('gemini') }}",
+              "value2": "true"
+            }
+          ]
+        }
+      },
+      "id": "check-gemini",
+      "name": "Gemini Enabled?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [440, 500]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.engines.includes('perplexity') }}",
+              "value2": "true"
+            }
+          ]
+        }
+      },
+      "id": "check-perplexity",
+      "name": "Perplexity Enabled?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [440, 700]
+    },
+    {
+      "parameters": {
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'gpt-4o-mini', messages: [{ role: 'user', content: $('Parse & Classify Query').item.json.query }], temperature: $('Parse & Classify Query').item.json.options.temperature, max_tokens: $('Parse & Classify Query').item.json.options.maxTokens }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "query-openai",
+      "name": "Query OpenAI",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [700, 0],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {"name": "x-api-key", "value": "={{ $credentials.httpHeaderAuth.value }}"},
+            {"name": "anthropic-version", "value": "2023-06-01"},
+            {"name": "content-type", "value": "application/json"}
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'claude-3-5-sonnet-20241022', max_tokens: $('Parse & Classify Query').item.json.options.maxTokens, messages: [{ role: 'user', content: $('Parse & Classify Query').item.json.query }] }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "query-anthropic",
+      "name": "Query Claude",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [700, 200],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ contents: [{ parts: [{ text: $('Parse & Classify Query').item.json.query }] }], generationConfig: { temperature: $('Parse & Classify Query').item.json.options.temperature, maxOutputTokens: $('Parse & Classify Query').item.json.options.maxTokens } }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "query-gemini",
+      "name": "Query Gemini",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [700, 400],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "url": "https://api.perplexity.ai/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {"name": "Authorization", "value": "Bearer {{ $credentials.httpHeaderAuth.value }}"},
+            {"name": "content-type", "value": "application/json"}
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'sonar', messages: [{ role: 'user', content: $('Parse & Classify Query').item.json.query }], max_tokens: $('Parse & Classify Query').item.json.options.maxTokens }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "query-perplexity",
+      "name": "Query Perplexity",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [700, 600],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Skip node - returns empty response for disabled engine\nreturn { json: { engine: 'openai', skipped: true, response: null } };"
+      },
+      "id": "skip-openai",
+      "name": "Skip OpenAI",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [700, 100]
+    },
+    {
+      "parameters": {
+        "jsCode": "return { json: { engine: 'anthropic', skipped: true, response: null } };"
+      },
+      "id": "skip-anthropic",
+      "name": "Skip Claude",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [700, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "return { json: { engine: 'gemini', skipped: true, response: null } };"
+      },
+      "id": "skip-gemini",
+      "name": "Skip Gemini",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [700, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "return { json: { engine: 'perplexity', skipped: true, response: null } };"
+      },
+      "id": "skip-perplexity",
+      "name": "Skip Perplexity",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [700, 700]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Aggregate all LLM responses\nconst requestData = $('Parse & Classify Query').first().json;\n\n// Helper to extract text from various API response formats\nfunction extractText(item, engine) {\n  if (!item || item.skipped) return null;\n  \n  const json = item.json;\n  \n  // Check for errors\n  if (json.error) {\n    return { engine, error: json.error.message || JSON.stringify(json.error), text: null };\n  }\n  \n  try {\n    switch (engine) {\n      case 'openai':\n        return {\n          engine,\n          text: json.choices?.[0]?.message?.content || null,\n          model: json.model,\n          usage: json.usage\n        };\n      case 'anthropic':\n        return {\n          engine,\n          text: json.content?.[0]?.text || null,\n          model: json.model,\n          usage: json.usage\n        };\n      case 'gemini':\n        return {\n          engine,\n          text: json.candidates?.[0]?.content?.parts?.[0]?.text || null,\n          model: 'gemini-1.5-flash'\n        };\n      case 'perplexity':\n        return {\n          engine,\n          text: json.choices?.[0]?.message?.content || null,\n          model: json.model,\n          citations: json.citations\n        };\n      default:\n        return { engine, text: null, error: 'Unknown engine' };\n    }\n  } catch (e) {\n    return { engine, error: e.message, text: null };\n  }\n}\n\n// Collect responses from all paths\nconst allItems = $input.all();\nconst responses = [];\n\n// Map items to engines (order matters based on workflow connections)\nconst engineOrder = ['openai', 'anthropic', 'gemini', 'perplexity'];\n\nfor (let i = 0; i < allItems.length && i < engineOrder.length; i++) {\n  const extracted = extractText(allItems[i], engineOrder[i]);\n  if (extracted) {\n    responses.push(extracted);\n  }\n}\n\n// Extract URLs from all responses\nconst urlRegex = /https?:\\/\\/[^\\s<>\"'\\)\\]]+/gi;\nconst allUrls = new Set();\n\nresponses.forEach(r => {\n  if (r.text) {\n    const urls = r.text.match(urlRegex) || [];\n    urls.forEach(url => allUrls.add(url.replace(/[.,;:!?]+$/, '')));\n  }\n});\n\n// Calculate word counts and metadata\nconst validResponses = responses.filter(r => r.text && !r.error);\nconst errorResponses = responses.filter(r => r.error);\n\nreturn {\n  json: {\n    requestId: requestData.requestId,\n    query: requestData.query,\n    queryType: requestData.queryType,\n    synthesisEngine: requestData.synthesisEngine,\n    options: requestData.options,\n    responses: responses,\n    validCount: validResponses.length,\n    errorCount: errorResponses.length,\n    extractedUrls: Array.from(allUrls),\n    timing: {\n      startTime: requestData.startTime,\n      responsesCollectedAt: Date.now(),\n      responseTimeMs: Date.now() - requestData.startTime\n    }\n  }\n};"
+      },
+      "id": "aggregate-responses",
+      "name": "Aggregate LLM Responses",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [980, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.validCount }}",
+              "operation": "gt",
+              "value2": 0
+            }
+          ]
+        }
+      },
+      "id": "check-valid-responses",
+      "name": "Has Valid Responses?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1200, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build synthesis prompt\nconst data = $input.first().json;\n\nconst validResponses = data.responses.filter(r => r.text && !r.error);\n\nlet responsesText = '';\nvalidResponses.forEach((r, i) => {\n  responsesText += `\\n\\n### ${r.engine.toUpperCase()} Response:\\n${r.text}`;\n});\n\nconst synthesisPrompt = `You are an expert at synthesizing information from multiple AI assistants.\n\nOriginal Query: \"${data.query}\"\nQuery Type: ${data.queryType}\n\nI have gathered responses from ${validResponses.length} different AI models:${responsesText}\n\nPlease provide a comprehensive synthesis that:\n\n1. **Unified Answer**: Combine the best insights from all responses into a cohesive, complete answer.\n\n2. **Consensus Points**: List areas where the AIs strongly agree.\n\n3. **Divergent Views**: Note any significant differences in their responses and explain why these differences might exist.\n\n4. **Unique Insights**: Highlight any particularly valuable unique contributions from specific models.\n\n5. **Confidence Assessment**: Rate your confidence in the synthesized answer (Low/Medium/High) and explain why.\n\n6. **Sources**: If any responses included URLs or citations, compile the most relevant ones.\n\nFormat your response as JSON with these keys:\n{\n  \"synthesizedAnswer\": \"...\",\n  \"consensusPoints\": [\"...\"],\n  \"divergentViews\": [{\"topic\": \"...\", \"positions\": {\"engine\": \"view\"}}],\n  \"uniqueInsights\": [{\"engine\": \"...\", \"insight\": \"...\"}],\n  \"confidence\": {\"level\": \"High/Medium/Low\", \"reasoning\": \"...\"},\n  \"recommendedSources\": [\"...\"]\n}`;\n\nreturn {\n  json: {\n    ...data,\n    synthesisPrompt\n  }\n};"
+      },
+      "id": "build-synthesis-prompt",
+      "name": "Build Synthesis Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1420, 200]
+    },
+    {
+      "parameters": {
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ contents: [{ parts: [{ text: $json.synthesisPrompt }] }], generationConfig: { temperature: 0.3, maxOutputTokens: 4000 } }) }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "generate-synthesis",
+      "name": "Generate Synthesis (Gemini)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1640, 200],
+      "notes": "Uses Gemini Pro for synthesis (long context, good at summarization)"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse synthesis and build final response\nconst inputData = $('Build Synthesis Prompt').first().json;\nconst synthesisResponse = $input.first().json;\n\nlet synthesis = null;\nlet synthesisRaw = '';\n\ntry {\n  synthesisRaw = synthesisResponse.candidates?.[0]?.content?.parts?.[0]?.text || '';\n  \n  // Try to extract JSON from response\n  const jsonMatch = synthesisRaw.match(/\\{[\\s\\S]*\\}/);\n  if (jsonMatch) {\n    synthesis = JSON.parse(jsonMatch[0]);\n  }\n} catch (e) {\n  synthesis = {\n    synthesizedAnswer: synthesisRaw,\n    parseError: e.message\n  };\n}\n\n// Calculate key differences between responses\nconst validResponses = inputData.responses.filter(r => r.text && !r.error);\nconst keyDifferences = validResponses.map(r => {\n  const text = r.text || '';\n  const words = text.split(/\\s+/).length;\n  const hasBullets = /[-*•]\\s/.test(text);\n  const hasNumbers = /\\d+\\.\\s/.test(text);\n  const hasCode = /```/.test(text);\n  const hasLinks = /https?:\\/\\//.test(text);\n  \n  return {\n    engine: r.engine,\n    wordCount: words,\n    formatting: {\n      bullets: hasBullets,\n      numbered: hasNumbers,\n      code: hasCode,\n      links: hasLinks\n    },\n    model: r.model || 'unknown'\n  };\n});\n\nconst finalResponse = {\n  success: true,\n  requestId: inputData.requestId,\n  query: inputData.query,\n  queryType: inputData.queryType,\n  \n  // Individual responses\n  responses: inputData.responses.map(r => ({\n    engine: r.engine,\n    text: r.text,\n    error: r.error || null,\n    model: r.model,\n    citations: r.citations\n  })),\n  \n  // Synthesis\n  synthesis: synthesis,\n  \n  // Analysis\n  keyDifferences: keyDifferences,\n  extractedUrls: inputData.extractedUrls,\n  \n  // Metadata\n  meta: {\n    enginesQueried: inputData.responses.length,\n    successfulResponses: inputData.validCount,\n    failedResponses: inputData.errorCount,\n    synthesisEngine: 'gemini-1.5-pro',\n    totalTimeMs: Date.now() - inputData.timing.startTime\n  }\n};\n\nreturn { json: finalResponse };"
+      },
+      "id": "build-final-response",
+      "name": "Build Final Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1860, 200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $('Parse & Classify Query').item.json.options.enableCritique }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "check-critique-enabled",
+      "name": "Critique Enabled?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [2080, 200]
+    },
+    {
+      "parameters": {
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {"name": "x-api-key", "value": "={{ $credentials.httpHeaderAuth.value }}"},
+            {"name": "anthropic-version", "value": "2023-06-01"},
+            {"name": "content-type", "value": "application/json"}
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'claude-3-5-sonnet-20241022', max_tokens: 2000, messages: [{ role: 'user', content: `You are a critical reviewer. Analyze this AI-generated synthesis and identify any weaknesses, gaps, or areas that need improvement.\\n\\nOriginal Query: \"${$json.query}\"\\n\\nSynthesis:\\n${JSON.stringify($json.synthesis?.synthesizedAnswer || $json.synthesis, null, 2)}\\n\\nProvide:\\n1. **Strengths**: What the synthesis does well\\n2. **Weaknesses**: Gaps, oversimplifications, or errors\\n3. **Missing Perspectives**: What wasn't considered\\n4. **Improved Answer**: A refined version addressing the critiques\\n\\nFormat as JSON: { strengths: [], weaknesses: [], missingPerspectives: [], improvedAnswer: \"...\" }` }] }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "claude-critique",
+      "name": "Claude: Critique Synthesis",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [2300, 100],
+      "notes": "Optional critique round - Claude reviews the Gemini synthesis"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Add critique to final response\nconst baseResponse = $('Build Final Response').first().json;\nconst critiqueResponse = $input.first().json;\n\nlet critique = null;\ntry {\n  const critiqueText = critiqueResponse.content?.[0]?.text || '';\n  const jsonMatch = critiqueText.match(/\\{[\\s\\S]*\\}/);\n  if (jsonMatch) {\n    critique = JSON.parse(jsonMatch[0]);\n  } else {\n    critique = { raw: critiqueText };\n  }\n} catch (e) {\n  critique = { parseError: e.message };\n}\n\nreturn {\n  json: {\n    ...baseResponse,\n    critique: critique,\n    meta: {\n      ...baseResponse.meta,\n      critiqueEngine: 'claude-3-5-sonnet',\n      totalTimeMs: Date.now() - baseResponse.meta.totalTimeMs + baseResponse.meta.totalTimeMs\n    }\n  }\n};"
+      },
+      "id": "merge-critique",
+      "name": "Merge Critique",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2520, 100]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {"name": "Content-Type", "value": "application/json"},
+              {"name": "X-Request-Id", "value": "={{ $json.requestId }}"}
+            ]
+          }
+        }
+      },
+      "id": "respond-success",
+      "name": "Return Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [2740, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: false, error: 'No valid responses from any AI engine', requestId: $json.requestId, query: $json.query, responses: $json.responses }) }}",
+        "options": {
+          "responseCode": 502,
+          "responseHeaders": {
+            "entries": [
+              {"name": "Content-Type", "value": "application/json"}
+            ]
+          }
+        }
+      },
+      "id": "respond-error",
+      "name": "Return Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1420, 400]
+    },
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "metabot-health",
+        "options": {}
+      },
+      "id": "webhook-health",
+      "name": "Health Check",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 600],
+      "webhookId": "metabot-health"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: 'ok', service: 'metabot-n8n', timestamp: new Date().toISOString(), engines: ['openai', 'anthropic', 'gemini', 'perplexity'] }) }}",
+        "options": {}
+      },
+      "id": "respond-health",
+      "name": "Return Health",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [220, 600]
+    }
+  ],
+  "connections": {
+    "Query Webhook": {
+      "main": [[{ "node": "Parse & Classify Query", "type": "main", "index": 0 }]]
+    },
+    "Parse & Classify Query": {
+      "main": [[
+        { "node": "Check OpenAI Enabled?", "type": "main", "index": 0 },
+        { "node": "Check Claude Enabled?", "type": "main", "index": 0 },
+        { "node": "Check Gemini Enabled?", "type": "main", "index": 0 },
+        { "node": "Check Perplexity Enabled?", "type": "main", "index": 0 }
+      ]]
+    },
+    "Check OpenAI Enabled?": {
+      "main": [
+        [{ "node": "Query OpenAI", "type": "main", "index": 0 }],
+        [{ "node": "Skip OpenAI", "type": "main", "index": 0 }]
+      ]
+    },
+    "Check Claude Enabled?": {
+      "main": [
+        [{ "node": "Query Claude", "type": "main", "index": 0 }],
+        [{ "node": "Skip Claude", "type": "main", "index": 0 }]
+      ]
+    },
+    "Check Gemini Enabled?": {
+      "main": [
+        [{ "node": "Query Gemini", "type": "main", "index": 0 }],
+        [{ "node": "Skip Gemini", "type": "main", "index": 0 }]
+      ]
+    },
+    "Check Perplexity Enabled?": {
+      "main": [
+        [{ "node": "Query Perplexity", "type": "main", "index": 0 }],
+        [{ "node": "Skip Perplexity", "type": "main", "index": 0 }]
+      ]
+    },
+    "Query OpenAI": {
+      "main": [[{ "node": "Aggregate LLM Responses", "type": "main", "index": 0 }]]
+    },
+    "Skip OpenAI": {
+      "main": [[{ "node": "Aggregate LLM Responses", "type": "main", "index": 0 }]]
+    },
+    "Query Claude": {
+      "main": [[{ "node": "Aggregate LLM Responses", "type": "main", "index": 0 }]]
+    },
+    "Skip Claude": {
+      "main": [[{ "node": "Aggregate LLM Responses", "type": "main", "index": 0 }]]
+    },
+    "Query Gemini": {
+      "main": [[{ "node": "Aggregate LLM Responses", "type": "main", "index": 0 }]]
+    },
+    "Skip Gemini": {
+      "main": [[{ "node": "Aggregate LLM Responses", "type": "main", "index": 0 }]]
+    },
+    "Query Perplexity": {
+      "main": [[{ "node": "Aggregate LLM Responses", "type": "main", "index": 0 }]]
+    },
+    "Skip Perplexity": {
+      "main": [[{ "node": "Aggregate LLM Responses", "type": "main", "index": 0 }]]
+    },
+    "Aggregate LLM Responses": {
+      "main": [[{ "node": "Has Valid Responses?", "type": "main", "index": 0 }]]
+    },
+    "Has Valid Responses?": {
+      "main": [
+        [{ "node": "Build Synthesis Prompt", "type": "main", "index": 0 }],
+        [{ "node": "Return Error", "type": "main", "index": 0 }]
+      ]
+    },
+    "Build Synthesis Prompt": {
+      "main": [[{ "node": "Generate Synthesis (Gemini)", "type": "main", "index": 0 }]]
+    },
+    "Generate Synthesis (Gemini)": {
+      "main": [[{ "node": "Build Final Response", "type": "main", "index": 0 }]]
+    },
+    "Build Final Response": {
+      "main": [[{ "node": "Critique Enabled?", "type": "main", "index": 0 }]]
+    },
+    "Critique Enabled?": {
+      "main": [
+        [{ "node": "Claude: Critique Synthesis", "type": "main", "index": 0 }],
+        [{ "node": "Return Success", "type": "main", "index": 0 }]
+      ]
+    },
+    "Claude: Critique Synthesis": {
+      "main": [[{ "node": "Merge Critique", "type": "main", "index": 0 }]]
+    },
+    "Merge Critique": {
+      "main": [[{ "node": "Return Success", "type": "main", "index": 0 }]]
+    },
+    "Health Check": {
+      "main": [[{ "node": "Return Health", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    { "name": "metabot" },
+    { "name": "multi-llm" },
+    { "name": "aggregator" }
+  ]
+}

@@ -1,0 +1,379 @@
+{
+  "name": "ValueApe - Stock Research Pipeline",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "valueape-query",
+        "options": {
+          "responseMode": "responseNode"
+        }
+      },
+      "id": "webhook-query",
+      "name": "Stock Query Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [0, 400],
+      "webhookId": "valueape-query"
+    },
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "valueape-health",
+        "options": {}
+      },
+      "id": "webhook-health",
+      "name": "Health Check",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [0, 700],
+      "webhookId": "valueape-health"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: 'ok', service: 'valueape-n8n', timestamp: new Date().toISOString() }) }}",
+        "options": {}
+      },
+      "id": "respond-health",
+      "name": "Return Health",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [220, 700]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse incoming request and prepare for processing\nconst body = $input.first().json.body || $input.first().json;\n\nconst query = body.query?.trim();\nif (!query) {\n  throw new Error('Query is required');\n}\n\nconst userId = body.userId || 'anonymous';\nconst options = body.options || {};\n\n// Default options\nconst universe = options.universe || 'sp500';\nconst topN = options.topN || 10;\nconst objective = options.objective || 'balanced'; // max_return, min_risk, sharpe_ratio, balanced\nconst includeNews = options.includeNews !== false;\nconst includeSentiment = options.includeSentiment !== false;\nconst includeSEC = options.includeSEC || false;\n\nreturn {\n  json: {\n    query,\n    userId,\n    universe,\n    topN,\n    objective,\n    includeNews,\n    includeSentiment,\n    includeSEC,\n    requestId: `valueape_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,\n    startTime: Date.now()\n  }\n};"
+      },
+      "id": "parse-request",
+      "name": "Parse Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 400]
+    },
+    {
+      "parameters": {
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ contents: [{ parts: [{ text: `Classify this stock research query into exactly ONE category. Return ONLY the category word, nothing else.\\n\\nCategories:\\n- screening: Finding stocks matching criteria (e.g., \"best value stocks\", \"top growth stocks\", \"undervalued tech companies\")\\n- analysis: Deep dive into specific stock(s) (e.g., \"analyze AAPL\", \"compare MSFT vs GOOG\", \"why is TSLA down\")\\n- educational: Learning about concepts (e.g., \"what is P/E ratio\", \"how does dividend yield work\")\\n\\nQuery: \"${$json.query}\"\\n\\nCategory:` }] }], generationConfig: { temperature: 0.1, maxOutputTokens: 20 } }) }}",
+        "options": { "timeout": 15000 }
+      },
+      "id": "classify-query",
+      "name": "Gemini: Classify Query",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [440, 400],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse classification and determine query type\nconst input = $input.first().json;\nconst parseData = $('Parse Request').first().json;\n\nlet queryType = 'screening'; // default\n\ntry {\n  if (input.candidates && input.candidates[0]) {\n    const text = input.candidates[0].content?.parts?.[0]?.text?.toLowerCase().trim();\n    if (text?.includes('analysis')) queryType = 'analysis';\n    else if (text?.includes('educational')) queryType = 'educational';\n    else if (text?.includes('screening')) queryType = 'screening';\n  }\n} catch (e) {\n  // Keep default\n}\n\nreturn {\n  json: {\n    ...parseData,\n    queryType\n  }\n};"
+      },
+      "id": "parse-classification",
+      "name": "Parse Classification",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.queryType }}",
+              "value2": "educational"
+            }
+          ]
+        }
+      },
+      "id": "is-educational",
+      "name": "Is Educational?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [880, 400]
+    },
+    {
+      "parameters": {
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ contents: [{ parts: [{ text: `You are ValueApe, a knowledgeable stock market educator. Explain the following concept clearly and concisely. Use examples where helpful. Keep response under 300 words.\\n\\nQuestion: \"${$json.query}\"` }] }], generationConfig: { temperature: 0.5, maxOutputTokens: 500 } }) }}",
+        "options": { "timeout": 20000 }
+      },
+      "id": "educational-response",
+      "name": "Gemini: Educational",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1100, 200],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ contents: [{ parts: [{ text: `Parse this stock research query into structured parameters. Return ONLY valid JSON, no markdown.\\n\\nQuery: \"${$json.query}\"\\n\\nExtract:\\n{\\n  \"tickers\": [\"AAPL\", \"MSFT\"],  // specific tickers mentioned, empty array if none\\n  \"universe\": \"sp500\",  // sp500, nasdaq100, dow30, russell2000, or null for specific tickers\\n  \"sectors\": [\"technology\"],  // sector filters if mentioned\\n  \"objective\": \"balanced\",  // max_return, min_risk, sharpe_ratio, balanced, income\\n  \"horizon\": \"12m\",  // time horizon: 1m, 3m, 6m, 12m, 3y, 5y\\n  \"topN\": 10,  // number of results requested\\n  \"constraints\": {\\n    \"minMarketCap\": null,  // in billions\\n    \"maxPE\": null,\\n    \"minDividendYield\": null,\\n    \"excludeSectors\": []\\n  },\\n  \"analysisType\": \"screening\"  // screening, comparison, deep_dive\\n}` }] }], generationConfig: { temperature: 0.1, maxOutputTokens: 500 } }) }}",
+        "options": { "timeout": 20000 }
+      },
+      "id": "parse-query-params",
+      "name": "Gemini: Parse Query",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1100, 500],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract parsed parameters from Gemini response\nconst input = $input.first().json;\nconst baseData = $('Parse Classification').first().json;\n\nlet parsedParams = {\n  tickers: [],\n  universe: baseData.universe || 'sp500',\n  sectors: [],\n  objective: baseData.objective || 'balanced',\n  horizon: '12m',\n  topN: baseData.topN || 10,\n  constraints: {},\n  analysisType: baseData.queryType === 'analysis' ? 'deep_dive' : 'screening'\n};\n\ntry {\n  if (input.candidates && input.candidates[0]) {\n    let text = input.candidates[0].content?.parts?.[0]?.text || '';\n    // Clean markdown code blocks\n    text = text.replace(/```json\\n?/g, '').replace(/```\\n?/g, '').trim();\n    const parsed = JSON.parse(text);\n    parsedParams = { ...parsedParams, ...parsed };\n  }\n} catch (e) {\n  // Use defaults, try to extract tickers from query\n  const tickerMatch = baseData.query.match(/\\b[A-Z]{1,5}\\b/g);\n  if (tickerMatch) {\n    parsedParams.tickers = tickerMatch.filter(t => t.length >= 2 && t.length <= 5);\n  }\n}\n\n// Determine which stocks to fetch\nlet stocksToFetch = [];\nif (parsedParams.tickers && parsedParams.tickers.length > 0) {\n  stocksToFetch = parsedParams.tickers;\n} else {\n  // Universe defaults\n  const universes = {\n    'sp500': ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA', 'BRK.B', 'UNH', 'JNJ', 'V', 'JPM', 'PG', 'MA', 'HD', 'CVX', 'MRK', 'ABBV', 'PEP', 'KO'],\n    'nasdaq100': ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA', 'AVGO', 'COST', 'NFLX', 'AMD', 'ADBE', 'PEP', 'CSCO', 'TMUS', 'INTC', 'CMCSA', 'TXN', 'QCOM', 'AMGN'],\n    'dow30': ['AAPL', 'MSFT', 'UNH', 'GS', 'HD', 'CAT', 'MCD', 'V', 'AMGN', 'CRM', 'TRV', 'AXP', 'BA', 'HON', 'JPM', 'IBM', 'JNJ', 'PG', 'CVX', 'MRK']\n  };\n  stocksToFetch = universes[parsedParams.universe] || universes['sp500'];\n}\n\nreturn {\n  json: {\n    ...baseData,\n    parsedParams,\n    stocksToFetch,\n    stocksString: stocksToFetch.join(',')\n  }\n};"
+      },
+      "id": "extract-params",
+      "name": "Extract Parameters",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1320, 500]
+    },
+    {
+      "parameters": {
+        "url": "https://query1.finance.yahoo.com/v7/finance/quote",
+        "authentication": "none",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "symbols", "value": "={{ $json.stocksString }}" },
+            { "name": "fields", "value": "symbol,shortName,regularMarketPrice,regularMarketChangePercent,marketCap,trailingPE,forwardPE,priceToBook,dividendYield,fiftyTwoWeekHigh,fiftyTwoWeekLow,fiftyDayAverage,twoHundredDayAverage,trailingEps,revenueGrowth,earningsGrowth,returnOnEquity,debtToEquity,currentRatio,quickRatio" }
+          ]
+        },
+        "options": { "timeout": 15000 }
+      },
+      "id": "fetch-yahoo",
+      "name": "Yahoo Finance: Quotes",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1540, 400],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "url": "https://finnhub.io/api/v1/quote",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "symbol", "value": "={{ $json.stocksToFetch[0] }}" }
+          ]
+        },
+        "options": { "timeout": 10000 }
+      },
+      "id": "fetch-finnhub",
+      "name": "Finnhub: Real-time",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1540, 600],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Aggregate stock data from providers and calculate scores\nconst yahooResponse = $('Yahoo Finance: Quotes').first().json;\nconst params = $('Extract Parameters').first().json;\nconst baseData = params;\n\n// Parse Yahoo Finance data\nlet stocks = [];\ntry {\n  const quotes = yahooResponse.quoteResponse?.result || [];\n  stocks = quotes.map(q => ({\n    ticker: q.symbol,\n    name: q.shortName || q.symbol,\n    price: q.regularMarketPrice || 0,\n    changePercent: q.regularMarketChangePercent || 0,\n    marketCap: q.marketCap || 0,\n    pe: q.trailingPE || q.forwardPE || null,\n    pb: q.priceToBook || null,\n    dividendYield: q.dividendYield || 0,\n    fiftyTwoWeekHigh: q.fiftyTwoWeekHigh || 0,\n    fiftyTwoWeekLow: q.fiftyTwoWeekLow || 0,\n    ma50: q.fiftyDayAverage || 0,\n    ma200: q.twoHundredDayAverage || 0,\n    eps: q.trailingEps || 0,\n    revenueGrowth: q.revenueGrowth || 0,\n    earningsGrowth: q.earningsGrowth || 0,\n    roe: q.returnOnEquity || 0,\n    debtToEquity: q.debtToEquity || 0,\n    currentRatio: q.currentRatio || 0\n  }));\n} catch (e) {\n  // If Yahoo fails, create placeholder data\n  stocks = baseData.stocksToFetch.map(ticker => ({\n    ticker,\n    name: ticker,\n    price: 0,\n    dataError: true\n  }));\n}\n\n// Calculate signal scores for each stock\nconst scoredStocks = stocks.map(stock => {\n  // Value Signal (lower PE/PB = better)\n  let valueScore = 50;\n  if (stock.pe && stock.pe > 0) {\n    if (stock.pe < 15) valueScore = 80 + (15 - stock.pe) * 2;\n    else if (stock.pe < 25) valueScore = 60 + (25 - stock.pe) * 2;\n    else if (stock.pe < 40) valueScore = 40 + (40 - stock.pe);\n    else valueScore = Math.max(10, 40 - (stock.pe - 40) * 0.5);\n  }\n  if (stock.pb && stock.pb > 0 && stock.pb < 3) valueScore += 10;\n  valueScore = Math.min(100, Math.max(0, valueScore));\n\n  // Momentum Signal (price vs MAs, 52-week position)\n  let momentumScore = 50;\n  if (stock.price > 0 && stock.ma50 > 0) {\n    if (stock.price > stock.ma50) momentumScore += 15;\n    if (stock.price > stock.ma200) momentumScore += 15;\n    // 52-week position\n    const range = stock.fiftyTwoWeekHigh - stock.fiftyTwoWeekLow;\n    if (range > 0) {\n      const position = (stock.price - stock.fiftyTwoWeekLow) / range;\n      momentumScore += position * 20 - 10; // -10 to +10 based on position\n    }\n  }\n  momentumScore = Math.min(100, Math.max(0, momentumScore));\n\n  // Quality Signal (ROE, debt levels)\n  let qualityScore = 50;\n  if (stock.roe > 0.20) qualityScore += 25;\n  else if (stock.roe > 0.15) qualityScore += 15;\n  else if (stock.roe > 0.10) qualityScore += 5;\n  if (stock.debtToEquity < 0.5) qualityScore += 15;\n  else if (stock.debtToEquity < 1) qualityScore += 5;\n  else if (stock.debtToEquity > 2) qualityScore -= 15;\n  if (stock.currentRatio > 1.5) qualityScore += 10;\n  qualityScore = Math.min(100, Math.max(0, qualityScore));\n\n  // Growth Signal\n  let growthScore = 50;\n  if (stock.revenueGrowth > 0.20) growthScore += 25;\n  else if (stock.revenueGrowth > 0.10) growthScore += 15;\n  else if (stock.revenueGrowth > 0.05) growthScore += 5;\n  if (stock.earningsGrowth > 0.20) growthScore += 25;\n  else if (stock.earningsGrowth > 0.10) growthScore += 15;\n  growthScore = Math.min(100, Math.max(0, growthScore));\n\n  // Sentiment Score (placeholder - will be enriched by HuggingFace)\n  let sentimentScore = 50;\n\n  // Apply objective weights\n  const weights = {\n    'max_return': { value: 0.15, momentum: 0.35, quality: 0.15, growth: 0.25, sentiment: 0.10 },\n    'min_risk': { value: 0.30, momentum: 0.10, quality: 0.35, growth: 0.10, sentiment: 0.15 },\n    'sharpe_ratio': { value: 0.25, momentum: 0.20, quality: 0.25, growth: 0.15, sentiment: 0.15 },\n    'balanced': { value: 0.20, momentum: 0.20, quality: 0.20, growth: 0.20, sentiment: 0.20 },\n    'income': { value: 0.25, momentum: 0.10, quality: 0.30, growth: 0.10, sentiment: 0.25 }\n  };\n  const w = weights[baseData.parsedParams.objective] || weights['balanced'];\n\n  const compositeScore = \n    valueScore * w.value +\n    momentumScore * w.momentum +\n    qualityScore * w.quality +\n    growthScore * w.growth +\n    sentimentScore * w.sentiment;\n\n  return {\n    ...stock,\n    signals: {\n      value: Math.round(valueScore),\n      momentum: Math.round(momentumScore),\n      quality: Math.round(qualityScore),\n      growth: Math.round(growthScore),\n      sentiment: Math.round(sentimentScore)\n    },\n    compositeScore: Math.round(compositeScore),\n    weights: w\n  };\n});\n\n// Sort by composite score and take top N\nconst rankedStocks = scoredStocks\n  .sort((a, b) => b.compositeScore - a.compositeScore)\n  .slice(0, baseData.parsedParams.topN);\n\nreturn {\n  json: {\n    ...baseData,\n    rankedStocks,\n    totalAnalyzed: scoredStocks.length,\n    dataSource: 'yahoo-finance'\n  }\n};"
+      },
+      "id": "calculate-scores",
+      "name": "Calculate Scores",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1760, 500]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.includeSentiment }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "include-sentiment",
+      "name": "Include Sentiment?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1980, 500]
+    },
+    {
+      "parameters": {
+        "url": "https://api.perplexity.ai/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "Bearer {{ $credentials.httpHeaderAuth.value }}" },
+            { "name": "content-type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'sonar', messages: [{ role: 'user', content: `Provide a brief market sentiment summary for these stocks: ${$json.rankedStocks.slice(0, 5).map(s => s.ticker).join(', ')}. Include any recent news, analyst ratings changes, or market events affecting them. Be concise - 2-3 sentences per stock max.` }], max_tokens: 800 }) }}",
+        "options": { "timeout": 25000 }
+      },
+      "id": "fetch-sentiment",
+      "name": "Perplexity: Sentiment",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [2200, 400],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Merge sentiment data with scores\nconst sentimentResponse = $input.first().json;\nconst scoreData = $('Calculate Scores').first().json;\n\nlet sentimentText = '';\nlet sentimentByStock = {};\n\ntry {\n  if (sentimentResponse.choices && sentimentResponse.choices[0]) {\n    sentimentText = sentimentResponse.choices[0].message?.content || '';\n    // Try to extract per-stock sentiment from the text\n    scoreData.rankedStocks.forEach(stock => {\n      const tickerRegex = new RegExp(`${stock.ticker}[:\\\\s]+([^.]+\\\\.)`,'i');\n      const match = sentimentText.match(tickerRegex);\n      if (match) {\n        sentimentByStock[stock.ticker] = match[1].trim();\n      }\n    });\n  }\n} catch (e) {\n  // Continue without sentiment\n}\n\n// Update stocks with sentiment\nconst enrichedStocks = scoreData.rankedStocks.map(stock => ({\n  ...stock,\n  sentimentSummary: sentimentByStock[stock.ticker] || null\n}));\n\nreturn {\n  json: {\n    ...scoreData,\n    rankedStocks: enrichedStocks,\n    sentimentText,\n    hasSentiment: !!sentimentText\n  }\n};"
+      },
+      "id": "merge-sentiment",
+      "name": "Merge Sentiment",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2420, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Pass through without sentiment enrichment\nconst scoreData = $('Calculate Scores').first().json;\n\nreturn {\n  json: {\n    ...scoreData,\n    hasSentiment: false\n  }\n};"
+      },
+      "id": "skip-sentiment",
+      "name": "Skip Sentiment",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2200, 600]
+    },
+    {
+      "parameters": {
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ contents: [{ parts: [{ text: `You are ValueApe, a professional stock research analyst. Generate a concise analysis of these ranked stock picks.\\n\\nOriginal Query: \"${$json.query}\"\\nObjective: ${$json.parsedParams.objective}\\nUniverse: ${$json.parsedParams.universe}\\n\\nRanked Results (top ${$json.rankedStocks.length}):\\n${$json.rankedStocks.map((s, i) => `${i+1}. ${s.ticker} (${s.name})\\n   Composite Score: ${s.compositeScore}/100\\n   Signals: Value ${s.signals.value}, Momentum ${s.signals.momentum}, Quality ${s.signals.quality}, Growth ${s.signals.growth}\\n   Price: $${s.price?.toFixed(2) || 'N/A'}, P/E: ${s.pe?.toFixed(1) || 'N/A'}, Market Cap: $${(s.marketCap/1e9)?.toFixed(1) || 'N/A'}B${s.sentimentSummary ? '\\n   Sentiment: ' + s.sentimentSummary : ''}`).join('\\n\\n')}\\n\\nProvide:\\n1. A 2-sentence overview of the results\\n2. Top 3 picks with 1-sentence rationale each\\n3. Key risk factors (1-2 sentences)\\n4. One contrarian view or consideration\\n\\nKeep total response under 300 words. Be direct and avoid filler phrases.` }] }], generationConfig: { temperature: 0.7, maxOutputTokens: 600 } }) }}",
+        "options": { "timeout": 30000 }
+      },
+      "id": "generate-analysis",
+      "name": "Gemini: Analysis",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [2640, 500],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build final response\nconst analysisResponse = $input.first().json;\nlet inputData;\n\ntry {\n  // Try to get from Merge Sentiment first, fall back to Skip Sentiment\n  inputData = $('Merge Sentiment').first()?.json || $('Skip Sentiment').first()?.json;\n} catch (e) {\n  inputData = $('Skip Sentiment').first().json;\n}\n\nconst baseData = $('Parse Request').first().json;\n\nlet analysisText = '';\ntry {\n  if (analysisResponse.candidates && analysisResponse.candidates[0]) {\n    analysisText = analysisResponse.candidates[0].content?.parts?.[0]?.text || '';\n  }\n} catch (e) {\n  analysisText = 'Analysis generation failed. Please review the ranked results below.';\n}\n\n// Calculate response time\nconst responseTimeMs = Date.now() - baseData.startTime;\n\nreturn {\n  json: {\n    success: true,\n    requestId: baseData.requestId,\n    query: baseData.query,\n    queryType: inputData?.queryType || 'screening',\n    objective: inputData?.parsedParams?.objective || 'balanced',\n    analysis: analysisText,\n    rankedStocks: inputData?.rankedStocks || [],\n    totalAnalyzed: inputData?.totalAnalyzed || 0,\n    meta: {\n      hasSentiment: inputData?.hasSentiment || false,\n      dataSource: inputData?.dataSource || 'unknown',\n      responseTimeMs,\n      timestamp: new Date().toISOString()\n    }\n  }\n};"
+      },
+      "id": "build-response",
+      "name": "Build Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2860, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build educational response\nconst eduResponse = $input.first().json;\nconst baseData = $('Parse Request').first().json;\n\nlet answerText = '';\ntry {\n  if (eduResponse.candidates && eduResponse.candidates[0]) {\n    answerText = eduResponse.candidates[0].content?.parts?.[0]?.text || '';\n  }\n} catch (e) {\n  answerText = 'I could not generate an educational response. Please try rephrasing your question.';\n}\n\nreturn {\n  json: {\n    success: true,\n    requestId: baseData.requestId,\n    query: baseData.query,\n    queryType: 'educational',\n    analysis: answerText,\n    rankedStocks: [],\n    totalAnalyzed: 0,\n    meta: {\n      responseTimeMs: Date.now() - baseData.startTime,\n      timestamp: new Date().toISOString()\n    }\n  }\n};"
+      },
+      "id": "build-edu-response",
+      "name": "Build Educational Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1320, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              { "name": "Content-Type", "value": "application/json" },
+              { "name": "X-Query-Type", "value": "={{ $json.queryType }}" }
+            ]
+          }
+        }
+      },
+      "id": "respond-success",
+      "name": "Return Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [3080, 400]
+    }
+  ],
+  "connections": {
+    "Stock Query Webhook": {
+      "main": [[{ "node": "Parse Request", "type": "main", "index": 0 }]]
+    },
+    "Health Check": {
+      "main": [[{ "node": "Return Health", "type": "main", "index": 0 }]]
+    },
+    "Parse Request": {
+      "main": [[{ "node": "Gemini: Classify Query", "type": "main", "index": 0 }]]
+    },
+    "Gemini: Classify Query": {
+      "main": [[{ "node": "Parse Classification", "type": "main", "index": 0 }]]
+    },
+    "Parse Classification": {
+      "main": [[{ "node": "Is Educational?", "type": "main", "index": 0 }]]
+    },
+    "Is Educational?": {
+      "main": [
+        [{ "node": "Gemini: Educational", "type": "main", "index": 0 }],
+        [{ "node": "Gemini: Parse Query", "type": "main", "index": 0 }]
+      ]
+    },
+    "Gemini: Educational": {
+      "main": [[{ "node": "Build Educational Response", "type": "main", "index": 0 }]]
+    },
+    "Build Educational Response": {
+      "main": [[{ "node": "Return Response", "type": "main", "index": 0 }]]
+    },
+    "Gemini: Parse Query": {
+      "main": [[{ "node": "Extract Parameters", "type": "main", "index": 0 }]]
+    },
+    "Extract Parameters": {
+      "main": [[{ "node": "Yahoo Finance: Quotes", "type": "main", "index": 0 }]]
+    },
+    "Yahoo Finance: Quotes": {
+      "main": [[{ "node": "Calculate Scores", "type": "main", "index": 0 }]]
+    },
+    "Finnhub: Real-time": {
+      "main": [[{ "node": "Calculate Scores", "type": "main", "index": 0 }]]
+    },
+    "Calculate Scores": {
+      "main": [[{ "node": "Include Sentiment?", "type": "main", "index": 0 }]]
+    },
+    "Include Sentiment?": {
+      "main": [
+        [{ "node": "Perplexity: Sentiment", "type": "main", "index": 0 }],
+        [{ "node": "Skip Sentiment", "type": "main", "index": 0 }]
+      ]
+    },
+    "Perplexity: Sentiment": {
+      "main": [[{ "node": "Merge Sentiment", "type": "main", "index": 0 }]]
+    },
+    "Merge Sentiment": {
+      "main": [[{ "node": "Gemini: Analysis", "type": "main", "index": 0 }]]
+    },
+    "Skip Sentiment": {
+      "main": [[{ "node": "Gemini: Analysis", "type": "main", "index": 0 }]]
+    },
+    "Gemini: Analysis": {
+      "main": [[{ "node": "Build Response", "type": "main", "index": 0 }]]
+    },
+    "Build Response": {
+      "main": [[{ "node": "Return Response", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": []
+}

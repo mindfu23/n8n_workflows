@@ -34,88 +34,13 @@
     },
     {
       "parameters": {
-        "values": {
-          "string": [
-            {
-              "name": "concept",
-              "value": "={{ $json.body?.concept || $json.concept || 'A story about...' }}"
-            },
-            {
-              "name": "genre",
-              "value": "={{ $json.body?.genre || $json.genre || 'literary fiction' }}"
-            },
-            {
-              "name": "tone",
-              "value": "={{ $json.body?.tone || $json.tone || 'engaging' }}"
-            },
-            {
-              "name": "targetChapters",
-              "value": "={{ $json.body?.targetChapters || $json.targetChapters || 5 }}"
-            },
-            {
-              "name": "projectSlug",
-              "value": "={{ ($json.body?.projectSlug || $json.projectSlug || $json.body?.concept || $json.concept || 'untitled').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').substring(0, 40) }}"
-            },
-            {
-              "name": "chapterLengthMode",
-              "value": "={{ $json.body?.chapterLengthMode || $json.chapterLengthMode || 'adaptive' }}"
-            },
-            {
-              "name": "voiceGuide",
-              "value": "={{ $json.body?.voiceGuide || $json.voiceGuide || '' }}"
-            },
-            {
-              "name": "currentChapter",
-              "value": "1"
-            },
-            {
-              "name": "status",
-              "value": "planning"
-            },
-            {
-              "name": "chapterOutlines",
-              "value": "={{ JSON.stringify($json.body?.chapterOutlines || $json.chapterOutlines || {}) }}"
-            },
-            {
-              "name": "finalChapterSummary",
-              "value": "={{ $json.body?.finalChapterSummary || $json.finalChapterSummary || '' }}"
-            },
-            {
-              "name": "useStoryCircle",
-              "value": "={{ $json.body?.useStoryCircle !== undefined ? $json.body.useStoryCircle : ($json.useStoryCircle !== undefined ? $json.useStoryCircle : true) }}"
-            },
-            {
-              "name": "protagonistGoal",
-              "value": "={{ $json.body?.protagonistGoal || $json.protagonistGoal || '' }}"
-            },
-            {
-              "name": "protagonistInternalGoal",
-              "value": "={{ $json.body?.protagonistInternalGoal || $json.protagonistInternalGoal || '' }}"
-            },
-            {
-              "name": "antagonistGoal",
-              "value": "={{ $json.body?.antagonistGoal || $json.antagonistGoal || '' }}"
-            },
-            {
-              "name": "supportingCharacterArcs",
-              "value": "={{ $json.body?.supportingCharacterArcs || $json.supportingCharacterArcs || '' }}"
-            },
-            {
-              "name": "startFromChapter",
-              "value": "={{ $json.body?.startFromChapter || $json.startFromChapter || 1 }}"
-            },
-            {
-              "name": "authorFeedback",
-              "value": "={{ $json.body?.authorFeedback || $json.authorFeedback || '' }}"
-            }
-          ]
-        },
+        "jsCode": "// Initialize Project State - processes webhook input or uses test data for manual trigger\nconst input = $input.first().json;\n\n// Check if we have real data (from webhook body or direct fields)\nconst hasData = input.body?.concept || input.concept;\n\n// Source: webhook sends {body: {...}}, manual trigger sends {} \nconst src = hasData ? (input.body || input) : {\n  \"projectSlug\": \"miskatonic-boys\",\n  \"concept\": \"Lovecraftian horror meets indie rock meets Scott Pilgrim. At Miskatonic University, two student musicians -- Margin Hawthorne (guitarist/engineer) and Korwen Llewelyn (vocalist/keyboardist) -- form a duo called the Miskatonic Boys. They discover the Dean has a deal with dark forces to recruit and sacrifice bands, manipulating culture through music. With help from a secret rebel group called the Dreamtenders, they use ancient chants and powerful frequencies in their music to fight back against the occult conspiracy.\",\n  \"genre\": \"Lovecraftian horror comedy\",\n  \"targetChapters\": 12,\n  \"tone\": \"darkly humorous, musically passionate, conspiratorial fun\",\n  \"chapterLengthMode\": \"adaptive\",\n  \"voiceGuide\": \"IMMERSIVE, CHARACTER-DRIVEN PROSE. The reader should be inside the characters' experiences \\u2014 feeling what they feel, scared when they're scared, laughing because THEY would laugh.\\n\\nSHORT SENTENCES (60-70% at 12 words or fewer). Fragments for in-the-moment reactions, not detached wit: 'The sound again.' / 'Closer this time.' Allow longer sentences when characters are caught up in feeling, fear, or musical transcendence.\\n\\nDIALOGUE-DRIVEN (45-55% of text). Characters speak like real college students. Short, natural lines. Almost exclusively 'said'/'asked'. Margin: hesitant, self-deprecating, reaches for music metaphors. Korwen: direct, decisive in music, uncertain in relationships, occasional Welsh-isms.\\n\\nHUMOR FROM SITUATIONS, NOT NARRATOR. Characters react authentically to insane things \\u2014 comedy is college kids dealing with Lovecraftian horror while worrying about their setlist and whether they like each other. Banter feels like real bandmates. Scott Pilgrim energy: mundane and epic coexist without winking at the camera.\\n\\nPHYSICAL GROUNDING. Small actions between dialogue: tuning a guitar, pulling a hoodie tighter in tunnels, old stone walls. Sensory details: what the music sounds like, what eldritch wrongness FEELS in the body.\\n\\nWORD CHOICE: Concrete, everyday vocabulary. Simple verbs (looked, turned, ran). EXCEPTION: music and eldritch phenomena can reach for vivid imagery \\u2014 not purple, but genuinely trying to capture something hard to describe. This is where metaphor lives.\\n\\nINTERNAL MONOLOGUE: Brief, active flashes. Thoughts in motion, reacting, deciding. Not brooding paragraphs.\\n\\nCLOSE THIRD PERSON rotating Margin/Korwen. Stay inside their experience.\\n\\nAVOID: Meta narrator commentary, characters being self-aware about genre, purple prose for horror (make it feel WRONG and physical instead), humor undercutting stakes, adverb-heavy attribution, long descriptions divorced from character experience.\",\n  \"chapterOutlines\": {\n    \"1\": \"Margin Hawthorne is introduced as a student at Miskatonic University, focused on his music and studies, while also exploring his interest in ancient history. He spends most of his free time playing guitar and creating digital music in his dorm room. He is orphaned and has no parents, and most wants to make sense of how to do better in the world than what was done to him. He needs to develop an ability to trust. Korwen Llewelyn arrives at the university on a music scholarship, transferring from Wales. Korwen most wants to find and recreate the beauty that sustained her mother growing up in their own life, and share it with others. She needs to develop the ability to be decisive even when it's risky. Korwen quickly catches Margin's attention because of her unique musical talent and striking appearance. They meet in a dormitory common area and discover their mutual passion for music, quickly becoming friends and forming the Miskatonic Boys.\",\n    \"2\": \"After a pretty successful concert in the main rec area of Korwen's floor, Margin and Korwen receive an anonymous invitation to attend a secret gathering on campus, known as the \\\"Midnight Society.\\\" Intrigued and excited by the prospect of being part of something mysterious and exclusive, they decide to attend the gathering. However, upon arriving at the event, they realize that it isn't a simple social gathering\\u2014rather, it's an occult ritual led by none other than Olivia Falwell. Their attendance at the ritual marks them as potential targets for the Dean's dark intentions. At the party, Olivia notes Margin and Korwen, and tries to get them interested in each other romantically. Both Margin and Korwen privately consider it.\",\n    \"3\": \"Margin and Korwen are both initially reluctant to believe that their beloved university is involved in any occult conspiracy. They dismiss their experience at the Midnight Society as a bizarre prank or a one-off event. However, they cannot shake the feeling that something sinister is happening behind the scenes at Miskatonic University. They resolve to focus on their music and studies, while keeping their eyes open for any further evidence of the university's dark underbelly.\",\n    \"4\": \"Margin begins to confide in his roommate, the Ayahuasca Student, who reveals that he has been experimenting with ayahuasca\\u2014an Amazonian plant known for its powerful hallucinogenic properties. He convinces Margin to try it with him, claiming that it could help him see the truth behind the strange events at Miskatonic University. Margin reluctantly agrees. They both embarking on a psychedelic journey that opens their eyes to the occult happenings on campus. Margin gets separated from his roommate. Still high, Margin goes to Korwen's room to discuss things with her. He asks about her roommate. Korwen has no roommate. The roommate was supposed to arrive a couple of days after Korwen started, but apparently never did. The rest of the room is bare. Korwen finds a note stuffed inside her roommate's mattress, with indecipherable scribblings, and a cute flowery smiley face written in blood. Margin tries to kiss Korwen. She does at first, and likes it, but breaks it off. Their musical connection is really much more important to her. He is hurt, but also on a deeper way he sees what she is saying.\",\n    \"5\": \"Together Margin and Korwen decide to delve deeper into the mysteries of Miskatonic University. They discover a hidden underground network of tunnels and secret rooms beneath the campus, where they find evidence of dark rituals and powerful magic. The deeper they go, the more danger they face, as they realize that they are being pursued by supernatural forces that do not want them to uncover the truth. Olivia Falwell finds out that Margin and Korwen have deduced some of her father's deeper plots, and presents herself to both of them. She reveals she is bisexual. She hits on each of them separately, and also says she is not necessarily only going to serve her father. If they can find a way for her to get free from her father, she will help them. Margin returns to his dorm, lost in thought. He finds his roommate has also disappeared. All his possessions have been removed. A note is left that looks like it's in his roommate's handwriting, but doesn't sound like him at all. Margin and Korwen are summoned into the Dean's office. They are given an ultimatum. They must only concentrate on their studies and nothing more. Otherwise they'll be expelled. A further threat is a part of this. Once they're expelled, they'll be of no use to any of the occult masters. They'll just be taken, killed, and their souls put to use for far darker purposes. Margin and Korwen promise they'll be good.\",\n    \"6\": \"Morgen and Korwen both agree their only chance at survival is continue to investigate the university's hidden world. Margin and Korwen encounter both allies and enemies. They befriend a group of students called the Dreamtenders, who dedicated to exposing the university's secret conspiracies. They also had invited and secured Margin's roommate. They intend to be the spark of life and hope within the darkness that always somehow happens to bring light out of the darkness and it's chaotic complexity of riches. They are a secret group of rebels within the occult college, a tradition that has gone on for centuries within the school. This group has members in the local college radio station, the local newspapers, and other creative groups. This group also completely distrusts Olivia Falwell and will have nothing to do with her. The Dreamtenders also provide a key part of the plot against Margin and Korwen - to get them romantically attached to each other. This would be done in order to get Margin and Korwen to eventually break up and never work together again. Korwen or Margin by themselves are much easier to manipulate. Also maybe Korwen by herself would go farther. Margin says she can leave at any time. Korwen says she knows, and maybe some day she will. But not today. Immediately after this, Margin and Korwen are also faced with the Dark Music Agent, who tries to lure them away from their investigation and into his own dark machinations. Dean Falwell becomes increasingly aware of their meddling, making their position at the university more precarious.\",\n    \"7\": \"Margin and Korwen decide that their best chance at stopping the occult conspiracy is to use their musical talents to fight back. They begin working with some of the Dreamtenders on a new album that incorporates ancient chants and powerful frequencies, designed to counteract the dark magic being used by Dean Falwell and his followers. As Margin and Korwen and the Dreamtenders work on their music, they continue to learn more about the history of Miskatonic University and its connection to the occult.\",\n    \"8\": \"The Miskatonic Boys are invited to perform at a major on-campus concert, orchestrated by Dean Falwell and the Dark Music Agent. This is sold to them by Olivia Falwell as a chance to break the power of Dean Falwell. This concert is actually a trap. It's a mass ritual sacrifice, where their souls will be enslaved, and their music will be used to spread dark influence throughout the world. Margin and Korwen notice the number of Midnight Society members in key parts. Margin wants to just attack Olivia but Korwen instead makes an emotional plea to Olivia to explain what's going on. Olivia Falwell breaks down and tells them the full secret plan, right before they get on stage. She kisses them both deeply and wishes them both well. As they take the stage, they must perform knowing the true nature of the event and face the life-or-death challenge of stopping the ritual before it's too late. They both take Synthuasca and hope for the best.\",\n    \"9\": \"Right before they take the stage, Margin and Korwen share a kiss of love with no attachment and no promises, only a conscious dedication to how united in purpose they are. Through sheer willpower and determination, and help from the Dreamtenders, Margin and Korwen manage to turn the tables on the Midnight Society and their other adversaries, using their music to counteract the dark forces at play. Olivia appears to change her mind again, and start attacking and fighting as well. But Margin and Korwen's performance captivates the audience in a positive way, breaking the hypnotic trance that had been placed upon them. As a result, Dean Falwell's ritual fails, Olivia is knocked unconscious, and the Dark Music Agent devours Dean Falwell body and soul in a shocking twist.\",\n    \"10\": \"With Dean Falwell defeated and the dark ritual thwarted, Margin and Korwen are forced to flee Miskatonic University, pursued by the personal demon sent by the Dark Music Agent. They realize that while they have won a battle, they are still at risk from the dark forces that control the university. The Dreamtenders remain, and will abide. Olivia Falwell ascends her father's place. This may have been her actual plan all along. It will take some time for the transition to be public, but she will for now most likely be the next dean of Miskatonic University. And have a chance to destroy it, to shape it to her ends, or to serve the dark powers as completely as her father once did.\",\n    \"11\": \"Margin and Korwen demonstrate their mastery of their newfound abilities by evading the personal demon and using their music to protect themselves. They confront the Dark Music Agent, using their combined talents to banish him back to the realm from which he came.\",\n    \"12\": \"Having defeated their enemies, Margin and Korwen leave Miskatonic University behind. They continue to create music together, using their experiences and newfound knowledge to inspire others and heal those affected by dark influences. Although they have escaped the clutches of Miskatonic University's sinister forces, they remain vigilant, knowing that they may be called upon again to battle the darkness that lurks beneath the surface of the world.\"\n  },\n  \"finalChapterSummary\": \"Having defeated their enemies, Margin and Korwen leave Miskatonic University behind. They continue to create music together, using their experiences and newfound knowledge to inspire others and heal those affected by dark influences. Although they have escaped the clutches of Miskatonic University's sinister forces, they remain vigilant, knowing that they may be called upon again to battle the darkness that lurks beneath the surface of the world.\",\n  \"useStoryCircle\": true,\n  \"protagonistGoal\": \"Margin wants to make meaningful music and get his album heard \\u2014 to prove his art matters.\",\n  \"protagonistInternalGoal\": \"Margin needs to learn to trust others and stop trying to control everything alone.\",\n  \"antagonistGoal\": \"Dean Falwell seeks to recruit the Miskatonic Boys as the next sacrificial band in his occult deal, using their talent to further manipulate culture through music.\",\n  \"supportingCharacterArcs\": \"Korwen needs to learn to be decisive and trust her own judgment independent of others. Olivia plays all sides for her own ascension.\",\n  \"startFromChapter\": 1,\n  \"authorFeedback\": \"\"\n};\n\n// Build project state\nconst projectSlug = (src.projectSlug || src.concept || 'untitled')\n  .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').substring(0, 40);\n\nreturn {\n  json: {\n    projectSlug,\n    concept: src.concept || 'A story about...',\n    genre: src.genre || 'literary fiction',\n    tone: src.tone || 'engaging',\n    targetChapters: src.targetChapters || 5,\n    chapterLengthMode: src.chapterLengthMode || 'adaptive',\n    voiceGuide: src.voiceGuide || '',\n    currentChapter: src.startFromChapter || 1,\n    status: 'planning',\n    chapterOutlines: typeof src.chapterOutlines === 'string' \n      ? src.chapterOutlines \n      : JSON.stringify(src.chapterOutlines || {}),\n    finalChapterSummary: src.finalChapterSummary || '',\n    useStoryCircle: src.useStoryCircle !== undefined ? src.useStoryCircle : true,\n    protagonistGoal: src.protagonistGoal || '',\n    protagonistInternalGoal: src.protagonistInternalGoal || '',\n    antagonistGoal: src.antagonistGoal || '',\n    supportingCharacterArcs: src.supportingCharacterArcs || '',\n    startFromChapter: src.startFromChapter || 1,\n    authorFeedback: src.authorFeedback || '',\n    tokenUsage: [],\n    pipelineLog: []\n  }\n};",
         "options": {}
       },
       "id": "init-state",
       "name": "Initialize Project State",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3,
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [
         220,
         200
@@ -129,7 +54,8 @@
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ model: 'gpt-4o', messages: [{ role: 'system', content: 'You are a master story architect who uses Dan Harmon\\'s Story Circle methodology to create detailed, compelling plot structures with strong emotional arcs.' }, { role: 'user', content: `Create a detailed plot outline for a ${$json.genre} novel with the following concept:\\n\\n${$json.concept}\\n\\nTone: ${$json.tone}\\nTarget chapters: ${$json.targetChapters}\\n\\n${(() => { const outlines = (() => { try { return typeof $json.chapterOutlines === 'string' ? JSON.parse($json.chapterOutlines) : ($json.chapterOutlines || {}); } catch(e) { return {}; } })(); const keys = Object.keys(outlines); const final = $json.finalChapterSummary || ''; let s = ''; if (keys.length > 0) { s += '\\\\n\\\\nThe author has provided outlines for some chapters. Respect these exactly and build your plot structure around them:\\\\n' + keys.map(k => 'Chapter ' + k + ': ' + outlines[k]).join('\\\\n'); } if (final) { s += '\\\\n\\\\nThe story must build toward this ending: ' + final; } return s; })()}\\n\\n${$json.useStoryCircle ? '## Story Circle Framework\\nDan Harmon\\'s Story Circle (8 beats):\\n1. YOU (comfort zone) - Establish the protagonist in their ordinary world. Emotional baseline.\\n2. NEED (want something) - The protagonist recognizes a desire or lack. Tension begins rising.\\n3. GO (enter unfamiliar situation) - The protagonist crosses a threshold into the unknown. Commitment.\\n4. SEARCH (adapt) - The protagonist struggles to adapt to new circumstances. Emotional low or rising tension.\\n5. FIND (get what they wanted) - The protagonist achieves their goal or a version of it. Emotional peak.\\n6. TAKE (pay a heavy price) - The cost of getting what they wanted. Reversal. Emotional crash.\\n7. RETURN (back to familiar) - The protagonist returns to the familiar, but everything has changed. Processing.\\n8. CHANGE (having changed) - The protagonist is fundamentally transformed. New equilibrium.\\n\\nDiametric opposites (mirror each other thematically):\\n- Beat 1 (You) \u2194 Beat 5 (Find): comfort vs. achievement\\n- Beat 2 (Need) \u2194 Beat 6 (Take): wanting vs. paying the price\\n- Beat 3 (Go) \u2194 Beat 7 (Return): leaving vs. coming back changed\\n- Beat 4 (Search) \u2194 Beat 8 (Change): adapting vs. transformed\\n\\nEmotional arc: Beats 1-4 are generally ascending (building tension, hope, struggle). Beat 5 is the peak. Beats 6-8 descend through cost, return, and resolution \u2014 but the protagonist emerges changed.\\n\\n## Character Goals\\nProtagonist external goal: ' + ($json.protagonistGoal || 'Not specified') + '\\nProtagonist internal/emotional goal: ' + ($json.protagonistInternalGoal || 'Not specified') + '\\nAntagonist goal: ' + ($json.antagonistGoal || 'Not specified') + '\\nSupporting character arcs: ' + ($json.supportingCharacterArcs || 'Not specified') + '\\n\\n## Instructions\\nMap the 8 Story Circle beats across the ' + $json.targetChapters + ' chapters. For each chapter provide:\\n1. Which Story Circle beat(s) it falls on (a chapter may span partial beats)\\n2. The protagonist\\'s EXTERNAL progress toward their goal\\n3. The protagonist\\'s INTERNAL emotional state and growth\\n4. The antagonist\\'s moves and how they conflict with the protagonist\\n5. How the emotional up-down flow affects supporting characters and their choices\\n6. Key scenes and turning points\\n\\nFor chapters where the author has provided outlines, honor those exactly and map them to the appropriate beat. For unplotted chapters, generate plot that:\\n- Follows the Story Circle emotional arc\\n- Advances toward the next outlined chapter or final destination\\n- Creates meaningful conflict between protagonist and antagonist goals\\n- Shows how the protagonist\\'s internal emotional journey affects those around them\\n\\n' : '## Instructions\\nProvide:\\n1. Three-act structure breakdown\\n2. Major plot points (inciting incident, midpoint, climax, resolution)\\n3. Chapter-by-chapter outline with key scenes\\n4. Subplots and how they weave into main plot\\n\\n'}Format as structured JSON with keys: acts, plotPoints, chapters (array with: number, title, beat, protagonistExternal, protagonistEmotional, antagonistAction, supportingImpact, keyScenes), subplots, emotionalArc` }], temperature: 0.7, max_tokens: 4000 }) }}",
-        "options": {}
+        "options": {},
+        "method": "POST"
       },
       "id": "chatgpt-plot-outline",
       "name": "ChatGPT: Plot Outline",
@@ -166,7 +92,8 @@
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ model: 'claude-opus-4-6', max_tokens: 4000, messages: [{ role: 'user', content: `Based on this story concept, create detailed character profiles:\\n\\nConcept: ${$('Initialize Project State').item.json.concept}\\nGenre: ${$('Initialize Project State').item.json.genre}\\n\\nFor each major character provide:\\n1. Full name and physical description\\n2. Background and backstory\\n3. Core motivation and desires\\n4. Fears and flaws\\n5. Character arc (how they change)\\n6. Voice/speech patterns\\n7. Key relationships\\n\\nCreate 3-5 major characters and 2-3 supporting characters. Format as JSON.` }] }) }}",
-        "options": {}
+        "options": {},
+        "method": "POST"
       },
       "id": "claude-characters",
       "name": "Claude: Character Development",
@@ -199,7 +126,8 @@
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ model: 'sonar-pro', messages: [{ role: 'system', content: 'You are a research assistant helping an author with accurate historical and factual details for their novel.' }, { role: 'user', content: `Research the following for a ${$('Initialize Project State').item.json.genre} novel:\\n\\nConcept: ${$('Initialize Project State').item.json.concept}\\n\\nProvide:\\n1. Historical context and accurate period details\\n2. Setting-specific information (locations, culture, customs)\\n3. Technical details relevant to the plot\\n4. Common misconceptions to avoid\\n5. Authentic dialogue/slang for the era\\n6. Sources for further research\\n\\nBe specific and cite sources where possible.` }], max_tokens: 2000 }) }}",
-        "options": {}
+        "options": {},
+        "method": "POST"
       },
       "id": "perplexity-research",
       "name": "Perplexity: Research & Facts",
@@ -235,20 +163,11 @@
         "sheetName": {
           "__rl": true,
           "mode": "name",
-          "value": "={{ $json.projectSlug + '-projects' }}"
+          "value": "={{ ($json.projectSlug || 'unknown') + '-projects' }}"
         },
         "columns": {
-          "mappingMode": "defineBelow",
-          "value": {
-            "Project ID": "={{ $now.format('yyyyMMdd-HHmmss') }}",
-            "Project Slug": "={{ $json.projectSlug }}",
-            "Concept": "={{ $json.concept }}",
-            "Genre": "={{ $json.genre }}",
-            "Status": "={{ $json.status }}",
-            "Target Chapters": "={{ $json.targetChapters }}",
-            "Created At": "={{ $now.toISO() }}",
-            "Planning Data": "={{ JSON.stringify($json.planning).substring(0, 50000) }}"
-          }
+          "mappingMode": "autoMapInputData",
+          "value": {}
         },
         "options": {}
       },
@@ -312,7 +231,10 @@
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ model: 'claude-opus-4-6', max_tokens: 16000, messages: [{ role: 'user', content: `You are writing Chapter ${$json.currentChapter} of a ${$json.genre} novel.\\n\\n## Story Concept\\n${$json.concept}\\n\\n## Tone\\n${$json.tone}\\n\\n## Chapter Guidance\\n${(() => { const ch = String($json.currentChapter); const outlines = (() => { try { return typeof $json.chapterOutlines === 'string' ? JSON.parse($json.chapterOutlines) : ($json.chapterOutlines || {}); } catch(e) { return {}; } })(); const outline = outlines[ch] || ''; const finalSummary = $json.finalChapterSummary || ''; const totalCh = parseInt($json.targetChapters); let guidance = ''; if (outline) { guidance += 'OUTLINE FOR THIS CHAPTER: ' + outline; } else { guidance += 'No specific outline was provided for this chapter. Write an original chapter that naturally continues from previous events.'; const futureKeys = Object.keys(outlines).map(Number).filter(n => n > parseInt(ch)).sort((a,b) => a - b); if (futureKeys.length > 0) { guidance += '\\\\n\\\\nThis chapter should set up and work toward this upcoming plot point (Chapter ' + futureKeys[0] + '): ' + outlines[String(futureKeys[0])]; } } if (finalSummary && parseInt(ch) < totalCh) { guidance += '\\\\nThe story should ultimately arrive at this ending: ' + finalSummary; } return guidance; })()}\\n\\n## Story Circle Position\\n${(() => { if (!$json.useStoryCircle || $json.useStoryCircle === 'false') return 'Story Circle not active.'; const ch = parseInt($json.currentChapter); const total = parseInt($json.targetChapters); const beats = ['You (comfort zone)', 'Need (want something)', 'Go (enter unfamiliar)', 'Search (adapt)', 'Find (get what they wanted)', 'Take (pay heavy price)', 'Return (back to familiar)', 'Change (transformed)']; const beatPos = ((ch - 1) / (total - 1)) * 8; const primaryBeat = Math.min(Math.floor(beatPos), 7); const progress = beatPos - primaryBeat; let s = 'This chapter falls on Beat ' + (primaryBeat + 1) + ': ' + beats[primaryBeat]; if (progress > 0.3) { s += ', transitioning toward Beat ' + (primaryBeat + 2) + ': ' + (beats[primaryBeat + 1] || 'Resolution'); } s += '\\\\n\\\\nEmotional arc: ' + (beatPos <= 4 ? 'ASCENDING \u2014 building tension, hope, and struggle' : beatPos <= 5 ? 'PEAK \u2014 achievement but at what cost?' : 'DESCENDING \u2014 paying the price, returning changed'); if ($json.protagonistGoal) { s += '\\\\n\\\\nProtagonist external goal: ' + $json.protagonistGoal; } if ($json.protagonistInternalGoal) { s += '\\\\nProtagonist internal goal: ' + $json.protagonistInternalGoal; } if ($json.antagonistGoal) { s += '\\\\nAntagonist goal: ' + $json.antagonistGoal; } if ($json.supportingCharacterArcs) { s += '\\\\nSupporting arcs: ' + $json.supportingCharacterArcs; } s += '\\\\n\\\\nShow how the protagonist\\'s emotional state at this beat affects the people around them. The antagonist\\'s actions should create meaningful friction with what the protagonist wants.'; return s; })()}\\n\\n## Previous Chapter Context\\n${(() => { const summaries = $json.chapterSummaries || []; if (summaries.length === 0) return 'This is the first chapter \u2014 establish the world and characters.'; const recent = summaries.slice(-3); return 'What has happened in recent chapters (maintain continuity):\\\\n' + recent.map(s => 'Chapter ' + s.number + ' (score: ' + s.score + '):\\\\n' + 'Opening: ' + s.opening.substring(0, 400) + '...\\\\n' + 'Plot events: ' + (s.plotEvents || 'N/A').substring(0, 300) + '\\\\n' + 'Character state: ' + (s.characterState || 'N/A').substring(0, 200) + '\\\\n' + 'Ending: ...' + s.closing.substring(0, 300)).join('\\\\n\\\\n'); })()}\\n\\n## Planning Context\\nPlot Outline: ${JSON.stringify($json.planning?.plotOutline || {}).substring(0, 3000)}\\n\\nCharacters: ${JSON.stringify($json.planning?.characters || {}).substring(0, 3000)}\\n\\nResearch Notes: ${JSON.stringify($json.planning?.research || {}).substring(0, 2000)}\\n\\n## Author Voice & Style\\n${$json.voiceGuide ? $json.voiceGuide : 'No specific voice guide provided \u2014 use a natural, engaging style appropriate for the genre.'}\\n\\n## Author Feedback from Previous Chapter(s)\\n${$json.authorFeedback ? $json.authorFeedback : 'No author feedback provided \u2014 proceed with your best judgment.'}\\n\\n## Instructions\\nWrite Chapter ${$json.currentChapter} with:\\n- Strong scene-setting and sensory details\\n- Character-authentic dialogue\\n- Proper pacing and tension\\n- Connection to the overall plot arc\\n${$json.chapterLengthMode === 'fixed' ? '- Approximately 2000-3000 words' : '- Write as much as this chapter needs to adequately develop its characters, advance its plot points, establish its settings, and resolve or set up its conflicts. Do not pad or rush \u2014 let the story dictate the length.'}\\n\\nBegin the chapter now:` }] }) }}",
-        "options": {}
+        "options": {
+          "timeout": 600000
+        },
+        "method": "POST"
       },
       "id": "claude-write-chapter",
       "name": "Claude: Write Chapter Draft",
@@ -344,8 +266,9 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ model: 'grok-2-latest', messages: [{ role: 'system', content: 'You are a creative writing enhancer. Your job is to add creative flourishes, unexpected turns, witty dialogue, and memorable moments to existing prose. Keep the core story intact but make it more vibrant and engaging.' }, { role: 'user', content: `Review this chapter draft and suggest 3-5 creative enhancements. These could be:\\n- A memorable metaphor or image\\n- A witty dialogue exchange\\n- An unexpected but fitting detail\\n- A moment of dark humor or irony\\n- A sensory detail that brings a scene to life\\n\\nChapter Draft:\\n${$('Claude: Write Chapter Draft').item.json.content?.[0]?.text?.substring(0, 6000) || 'No draft available'}\\n\\nProvide your suggestions as a JSON array with keys: location (where in the chapter), type (metaphor/dialogue/detail/humor/sensory), original (brief quote of original), enhancement (your suggested addition/change), reasoning (why this improves the chapter)` }], temperature: 0.9, max_tokens: 2000 }) }}",
-        "options": {}
+        "jsonBody": "={{ JSON.stringify({ model: 'grok-3', messages: [{ role: 'system', content: 'You are a creative writing enhancer. Your job is to add creative flourishes, unexpected turns, witty dialogue, and memorable moments to existing prose. Keep the core story intact but make it more vibrant and engaging.' }, { role: 'user', content: `Review this chapter draft and suggest 3-5 creative enhancements. These could be:\\n- A memorable metaphor or image\\n- A witty dialogue exchange\\n- An unexpected but fitting detail\\n- A moment of dark humor or irony\\n- A sensory detail that brings a scene to life\\n\\nChapter Draft:\\n${$('Claude: Write Chapter Draft').item.json.content?.[0]?.text?.substring(0, 6000) || 'No draft available'}\\n\\nProvide your suggestions as a JSON array with keys: location (where in the chapter), type (metaphor/dialogue/detail/humor/sensory), original (brief quote of original), enhancement (your suggested addition/change), reasoning (why this improves the chapter)` }], temperature: 0.9, max_tokens: 2000 }) }}",
+        "options": {},
+        "method": "POST"
       },
       "id": "grok-creative",
       "name": "Grok: Creative Enhancements",
@@ -359,7 +282,7 @@
     },
     {
       "parameters": {
-        "jsCode": "function extractTokenUsage(response, node, model, provider, inputPricePerM, outputPricePerM) {\n  let inputTokens = 0, outputTokens = 0;\n  if (provider === 'google') {\n    inputTokens = response.usageMetadata?.promptTokenCount || 0;\n    outputTokens = response.usageMetadata?.candidatesTokenCount || 0;\n  } else if (provider === 'anthropic') {\n    inputTokens = response.usage?.input_tokens || 0;\n    outputTokens = response.usage?.output_tokens || 0;\n  } else {\n    inputTokens = response.usage?.prompt_tokens || 0;\n    outputTokens = response.usage?.completion_tokens || 0;\n  }\n  const costUSD = (inputTokens * inputPricePerM / 1000000) + (outputTokens * outputPricePerM / 1000000);\n  return { node, model, provider, inputTokens, outputTokens, costUSD: Math.round(costUSD * 1000000) / 1000000 };\n}\n\n// Combine chapter draft with creative suggestions\nconst projectState = $('Start Drafting Phase').item.json;\nconst claudeDraft = $('Claude: Write Chapter Draft').item.json;\nconst grokSuggestions = $('Grok: Creative Enhancements').item.json;\n\n// Token usage (updated pricing)\nconst newTokens = [\n  extractTokenUsage(claudeDraft, 'Claude: Write Chapter Draft', 'claude-opus-4-6', 'anthropic', 15, 75),\n  extractTokenUsage(grokSuggestions, 'Grok: Creative Enhancements', 'grok-2-latest', 'xai', 2, 10)\n];\nconst tokenUsage = [...(projectState.tokenUsage || []), ...newTokens];\n\nlet chapterText = '';\nlet suggestions = [];\n\nif (claudeDraft.content && claudeDraft.content[0]) {\n  chapterText = claudeDraft.content[0].text;\n}\n\ntry {\n  if (grokSuggestions.choices && grokSuggestions.choices[0]) {\n    const content = grokSuggestions.choices[0].message.content;\n    const jsonMatch = content.match(/\\[[\\s\\S]*\\]/);\n    suggestions = jsonMatch ? JSON.parse(jsonMatch[0]) : [];\n  }\n} catch (e) {\n  suggestions = [{ note: 'Could not parse Grok suggestions' }];\n}\n\n// Capture Grok suggestions as spare text for potential reuse\nconst spareText = [...(projectState.spareText || [])];\nif (suggestions.length > 0) {\n  spareText.push({\n    source: 'Grok: Creative Enhancements',\n    chapter: parseInt(projectState.currentChapter),\n    type: 'creative_suggestions',\n    content: JSON.stringify(suggestions, null, 2)\n  });\n}\n\n// Logging\nconst log = [...(projectState.pipelineLog || [])];\nlog.push({\n  timestamp: new Date().toISOString(),\n  node: 'Combine Draft & Suggestions',\n  chapter: parseInt(projectState.currentChapter),\n  action: 'Draft combined with suggestions',\n  draftWords: chapterText.split(/\\s+/).length,\n  suggestionsCount: suggestions.length,\n  tokens: newTokens.reduce((sum, t) => sum + t.inputTokens + t.outputTokens, 0)\n});\n\nreturn {\n  json: {\n    ...projectState,\n    tokenUsage,\n    pipelineLog: log,\n    spareText,\n    currentChapterDraft: {\n      chapterNumber: parseInt(projectState.currentChapter),\n      text: chapterText,\n      wordCount: chapterText.split(/\\s+/).length,\n      creativeSuggestions: suggestions,\n      draftedAt: new Date().toISOString()\n    }\n  }\n};"
+        "jsCode": "function extractTokenUsage(response, node, model, provider, inputPricePerM, outputPricePerM) {\n  let inputTokens = 0, outputTokens = 0;\n  if (provider === 'google') {\n    inputTokens = response.usageMetadata?.promptTokenCount || 0;\n    outputTokens = response.usageMetadata?.candidatesTokenCount || 0;\n  } else if (provider === 'anthropic') {\n    inputTokens = response.usage?.input_tokens || 0;\n    outputTokens = response.usage?.output_tokens || 0;\n  } else {\n    inputTokens = response.usage?.prompt_tokens || 0;\n    outputTokens = response.usage?.completion_tokens || 0;\n  }\n  const costUSD = (inputTokens * inputPricePerM / 1000000) + (outputTokens * outputPricePerM / 1000000);\n  return { node, model, provider, inputTokens, outputTokens, costUSD: Math.round(costUSD * 1000000) / 1000000 };\n}\n\n// Combine chapter draft with creative suggestions\nconst projectState = $('Start Drafting Phase').item.json;\nconst claudeDraft = $('Claude: Write Chapter Draft').item.json;\nconst grokSuggestions = $('Grok: Creative Enhancements').item.json;\n\n// Token usage (updated pricing)\nconst newTokens = [\n  extractTokenUsage(claudeDraft, 'Claude: Write Chapter Draft', 'claude-opus-4-6', 'anthropic', 15, 75),\n  extractTokenUsage(grokSuggestions, 'Grok: Creative Enhancements', 'grok-3', 'xai', 2, 10)\n];\nconst tokenUsage = [...(projectState.tokenUsage || []), ...newTokens];\n\nlet chapterText = '';\nlet suggestions = [];\n\nif (claudeDraft.content && claudeDraft.content[0]) {\n  chapterText = claudeDraft.content[0].text;\n}\n\ntry {\n  if (grokSuggestions.choices && grokSuggestions.choices[0]) {\n    const content = grokSuggestions.choices[0].message.content;\n    const jsonMatch = content.match(/\\[[\\s\\S]*\\]/);\n    suggestions = jsonMatch ? JSON.parse(jsonMatch[0]) : [];\n  }\n} catch (e) {\n  suggestions = [{ note: 'Could not parse Grok suggestions' }];\n}\n\n// Capture Grok suggestions as spare text for potential reuse\nconst spareText = [...(projectState.spareText || [])];\nif (suggestions.length > 0) {\n  spareText.push({\n    source: 'Grok: Creative Enhancements',\n    chapter: parseInt(projectState.currentChapter),\n    type: 'creative_suggestions',\n    content: JSON.stringify(suggestions, null, 2)\n  });\n}\n\n// Logging\nconst log = [...(projectState.pipelineLog || [])];\nlog.push({\n  timestamp: new Date().toISOString(),\n  node: 'Combine Draft & Suggestions',\n  chapter: parseInt(projectState.currentChapter),\n  action: 'Draft combined with suggestions',\n  draftWords: chapterText.split(/\\s+/).length,\n  suggestionsCount: suggestions.length,\n  tokens: newTokens.reduce((sum, t) => sum + t.inputTokens + t.outputTokens, 0)\n});\n\nreturn {\n  json: {\n    ...projectState,\n    tokenUsage,\n    pipelineLog: log,\n    spareText,\n    currentChapterDraft: {\n      chapterNumber: parseInt(projectState.currentChapter),\n      text: chapterText,\n      wordCount: chapterText.split(/\\s+/).length,\n      creativeSuggestions: suggestions,\n      draftedAt: new Date().toISOString()\n    }\n  }\n};"
       },
       "id": "combine-draft",
       "name": "Combine Draft & Suggestions",
@@ -377,8 +300,9 @@
         "genericAuthType": "httpQueryAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ contents: [{ parts: [{ text: `You are a developmental editor analyzing a chapter draft. Provide comprehensive feedback.\\n\\n## Chapter ${$json.currentChapterDraft.chapterNumber} Draft\\n${$json.currentChapterDraft.text.substring(0, 25000)}\\n\\n## Analysis Required\\n1. PACING: Is the chapter well-paced? Where does it drag or rush?\\n2. CHARACTER: Do characters feel authentic? Is dialogue natural?\\n3. PLOT: Does this chapter advance the story effectively?\\n4. THEMES: What themes emerge? Are they handled well?\\n5. PROSE: Quality of the writing - strengths and areas for improvement\\n6. HOOKS: Does it have a strong opening? Compelling ending?\\n\\nProvide specific, actionable feedback. Format as JSON with keys: pacing, character, plot, themes, prose, hooks, overallScore (1-10), priorityRevisions (array of top 3 things to fix)` }] }], generationConfig: { temperature: 0.3, maxOutputTokens: 3000 } }) }}",
-        "options": {}
+        "jsonBody": "={{ JSON.stringify({ contents: [{ parts: [{ text: `You are a developmental editor analyzing a chapter draft. Provide comprehensive feedback.\\n\\n## Chapter ${$('Combine Draft & Suggestions').first().json.currentChapterDraft.chapterNumber} Draft\\n${$('Combine Draft & Suggestions').first().json.currentChapterDraft.text.substring(0, 25000)}\\n\\n## Analysis Required\\n1. PACING: Is the chapter well-paced? Where does it drag or rush?\\n2. CHARACTER: Do characters feel authentic? Is dialogue natural?\\n3. PLOT: Does this chapter advance the story effectively?\\n4. THEMES: What themes emerge? Are they handled well?\\n5. PROSE: Quality of the writing - strengths and areas for improvement\\n6. HOOKS: Does it have a strong opening? Compelling ending?\\n\\nProvide specific, actionable feedback. Format as JSON with keys: pacing, character, plot, themes, prose, hooks, overallScore (1-10), priorityRevisions (array of top 3 things to fix)` }] }], generationConfig: { temperature: 0.3, maxOutputTokens: 3000 } }) }}",
+        "options": {},
+        "method": "POST"
       },
       "id": "gemini-review",
       "name": "Gemini: Comprehensive Review",
@@ -389,26 +313,6 @@
         100
       ],
       "notes": "Gemini's long context is ideal for full chapter analysis"
-    },
-    {
-      "parameters": {
-        "url": "https://api.openai.com/v1/chat/completions",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "openAiApi",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ model: 'gpt-4o', messages: [{ role: 'system', content: 'You are a continuity editor checking for plot consistency and logical coherence.' }, { role: 'user', content: `Check this chapter for consistency issues:\\n\\nChapter ${$json.currentChapterDraft.chapterNumber}:\\n${$json.currentChapterDraft.text.substring(0, 8000)}\\n\\nPlot Outline Context:\\n${JSON.stringify($json.planning?.plotOutline || {}).substring(0, 2000)}\\n\\nIdentify:\\n1. Timeline inconsistencies\\n2. Character behavior contradictions\\n3. Setting/world-building errors\\n4. Plot holes or logic gaps\\n5. Dropped threads or forgotten elements\\n\\nFormat as JSON: { issues: [{ type, description, severity (high/medium/low), suggestedFix }], consistencyScore: 1-10 }` }], temperature: 0.2, max_tokens: 2000 }) }}",
-        "options": {}
-      },
-      "id": "chatgpt-consistency",
-      "name": "ChatGPT: Consistency Check",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4,
-      "position": [
-        2060,
-        300
-      ],
-      "notes": "ChatGPT checks plot logic and consistency"
     },
     {
       "parameters": {
@@ -434,8 +338,47 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 3000, messages: [{ role: 'user', content: `Perform a line-level edit review of this chapter. Focus on prose quality.\\n\\nChapter ${$json.currentChapterDraft.chapterNumber}:\\n${$json.currentChapterDraft.text.substring(0, 10000)}\\n\\n## Author Voice Reference\\n${$json.voiceGuide ? 'The author\\'s intended voice: ' + $json.voiceGuide.substring(0, 1500) + '\\n\\nWhen reviewing, distinguish between genuine prose issues and intentional stylistic choices that serve this voice.' : 'No specific voice guide \u2014 evaluate against general best practices for the genre.'}\\n\\nIdentify:\\n1. Overused words or phrases\\n2. Passive voice that should be active\\n3. Weak verbs that could be stronger\\n4. Adverb overuse\\n5. Telling vs showing opportunities\\n6. Dialogue attribution issues\\n7. Rhythm and flow problems\\n\\nProvide specific examples with suggested improvements. Format as JSON: { lineEdits: [{ original, suggested, reason }], proseStrengths: [], overallProseScore: 1-10 }` }] }) }}",
-        "options": {}
+        "jsonBody": "={{ JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 2000, messages: [{ role: 'user', content: `You are a continuity editor checking for plot consistency and logical coherence.\\n\\nCheck this chapter for consistency issues:\\n\\nChapter ${$('Combine Draft & Suggestions').first().json.currentChapterDraft.chapterNumber}:\\n${$('Combine Draft & Suggestions').first().json.currentChapterDraft.text.substring(0, 8000)}\\n\\nPlot Outline Context:\\n${($('Combine Draft & Suggestions').first().json['Planning Data'] || 'No outline available').substring(0, 2000)}\\n\\nIdentify:\\n1. Timeline inconsistencies\\n2. Character behavior contradictions\\n3. Setting/world-building errors\\n4. Plot holes or logic gaps\\n5. Dropped threads or forgotten elements\\n\\nFormat as JSON with keys: issues (array of objects with type, description, severity, suggestedFix), consistencyScore (1-10)` }] }) }}",
+        "options": {},
+        "method": "POST"
+      },
+      "id": "claude-consistency",
+      "name": "Claude: Consistency Check",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        2060,
+        300
+      ],
+      "notes": "Claude Sonnet checks plot logic and consistency"
+    },
+    {
+      "parameters": {
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "={{ $credentials.httpHeaderAuth.value }}"
+            },
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 3000, messages: [{ role: 'user', content: `Perform a line-level edit review of this chapter. Focus on prose quality.\\n\\nChapter ${$('Combine Draft & Suggestions').first().json.currentChapterDraft.chapterNumber}:\\n${$('Combine Draft & Suggestions').first().json.currentChapterDraft.text.substring(0, 10000)}\\n\\n## Author Voice Reference\\n${$('Combine Draft & Suggestions').first().json.voiceGuide ? 'The author\\'s intended voice: ' + $('Combine Draft & Suggestions').first().json.voiceGuide.substring(0, 1500) + '\\n\\nWhen reviewing, distinguish between genuine prose issues and intentional stylistic choices that serve this voice.' : 'No specific voice guide \\u2014 evaluate against general best practices for the genre.'}\\n\\nIdentify:\\n1. Overused words or phrases\\n2. Passive voice that should be active\\n3. Weak verbs that could be stronger\\n4. Adverb overuse\\n5. Telling vs showing opportunities\\n6. Dialogue attribution issues\\n7. Rhythm and flow problems\\n\\nProvide specific examples with suggested improvements. Format as JSON: { lineEdits: [{ original, suggested, reason }], proseStrengths: [], overallProseScore: 1-10 }` }] }) }}",
+        "options": {},
+        "method": "POST"
       },
       "id": "claude-line-edit",
       "name": "Claude: Line Editing",
@@ -449,7 +392,7 @@
     },
     {
       "parameters": {
-        "jsCode": "function extractTokenUsage(response, node, model, provider, inputPricePerM, outputPricePerM) {\n  let inputTokens = 0, outputTokens = 0;\n  if (provider === 'google') {\n    inputTokens = response.usageMetadata?.promptTokenCount || 0;\n    outputTokens = response.usageMetadata?.candidatesTokenCount || 0;\n  } else if (provider === 'anthropic') {\n    inputTokens = response.usage?.input_tokens || 0;\n    outputTokens = response.usage?.output_tokens || 0;\n  } else {\n    inputTokens = response.usage?.prompt_tokens || 0;\n    outputTokens = response.usage?.completion_tokens || 0;\n  }\n  const costUSD = (inputTokens * inputPricePerM / 1000000) + (outputTokens * outputPricePerM / 1000000);\n  return { node, model, provider, inputTokens, outputTokens, costUSD: Math.round(costUSD * 1000000) / 1000000 };\n}\n\n// Aggregate all review feedback\nconst projectState = $('Combine Draft & Suggestions').item.json;\nconst geminiReview = $('Gemini: Comprehensive Review').item.json;\nconst chatgptConsistency = $('ChatGPT: Consistency Check').item.json;\nconst claudeLineEdit = $('Claude: Line Editing').item.json;\n\n// Token usage (updated pricing)\nconst newTokens = [\n  extractTokenUsage(geminiReview, 'Gemini: Comprehensive Review', 'gemini-2.5-flash', 'google', 0.15, 0.6),\n  extractTokenUsage(chatgptConsistency, 'ChatGPT: Consistency Check', 'gpt-4o', 'openai', 2.5, 10),\n  extractTokenUsage(claudeLineEdit, 'Claude: Line Editing', 'claude-sonnet-4-20250514', 'anthropic', 3, 15)\n];\nconst tokenUsage = [...(projectState.tokenUsage || []), ...newTokens];\n\nlet developmentalFeedback = {};\nlet consistencyFeedback = {};\nlet lineEditFeedback = {};\n\ntry {\n  if (geminiReview.candidates && geminiReview.candidates[0]) {\n    const text = geminiReview.candidates[0].content.parts[0].text;\n    const jsonMatch = text.match(/\\{[\\s\\S]*\\}/);\n    developmentalFeedback = jsonMatch ? JSON.parse(jsonMatch[0]) : { raw: text };\n  }\n} catch (e) {\n  developmentalFeedback = { error: 'Parse error', raw: geminiReview };\n}\n\ntry {\n  if (chatgptConsistency.choices && chatgptConsistency.choices[0]) {\n    const text = chatgptConsistency.choices[0].message.content;\n    const jsonMatch = text.match(/\\{[\\s\\S]*\\}/);\n    consistencyFeedback = jsonMatch ? JSON.parse(jsonMatch[0]) : { raw: text };\n  }\n} catch (e) {\n  consistencyFeedback = { error: 'Parse error' };\n}\n\ntry {\n  if (claudeLineEdit.content && claudeLineEdit.content[0]) {\n    const text = claudeLineEdit.content[0].text;\n    const jsonMatch = text.match(/\\{[\\s\\S]*\\}/);\n    lineEditFeedback = jsonMatch ? JSON.parse(jsonMatch[0]) : { raw: text };\n  }\n} catch (e) {\n  lineEditFeedback = { error: 'Parse error' };\n}\n\nconst scores = [\n  developmentalFeedback.overallScore,\n  consistencyFeedback.consistencyScore,\n  lineEditFeedback.overallProseScore\n].filter(s => typeof s === 'number');\nconst avgScore = scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : 5;\n\n// Capture review feedback as spare text\nconst spareText = [...(projectState.spareText || [])];\nspareText.push({\n  source: 'Review Feedback',\n  chapter: projectState.currentChapterDraft.chapterNumber,\n  type: 'developmental_review',\n  content: JSON.stringify(developmentalFeedback, null, 2).substring(0, 5000)\n});\nif (lineEditFeedback.lineEdits) {\n  spareText.push({\n    source: 'Claude: Line Editing',\n    chapter: projectState.currentChapterDraft.chapterNumber,\n    type: 'line_edit_suggestions',\n    content: JSON.stringify(lineEditFeedback.lineEdits, null, 2).substring(0, 5000)\n  });\n}\n\n// Logging\nconst log = [...(projectState.pipelineLog || [])];\nlog.push({\n  timestamp: new Date().toISOString(),\n  node: 'Aggregate Review Feedback',\n  chapter: projectState.currentChapterDraft.chapterNumber,\n  action: 'Reviews aggregated',\n  avgScore: avgScore.toFixed(1),\n  needsRevision: avgScore < 7,\n  tokens: newTokens.reduce((sum, t) => sum + t.inputTokens + t.outputTokens, 0)\n});\n\nreturn {\n  json: {\n    ...projectState,\n    tokenUsage,\n    pipelineLog: log,\n    spareText,\n    review: {\n      developmental: developmentalFeedback,\n      consistency: consistencyFeedback,\n      lineEdit: lineEditFeedback,\n      averageScore: avgScore.toFixed(1),\n      needsRevision: avgScore < 7,\n      reviewedAt: new Date().toISOString()\n    }\n  }\n};"
+        "jsCode": "function extractTokenUsage(response, node, model, provider, inputPricePerM, outputPricePerM) {\n  let inputTokens = 0, outputTokens = 0;\n  if (provider === 'google') {\n    inputTokens = response.usageMetadata?.promptTokenCount || 0;\n    outputTokens = response.usageMetadata?.candidatesTokenCount || 0;\n  } else if (provider === 'anthropic') {\n    inputTokens = response.usage?.input_tokens || 0;\n    outputTokens = response.usage?.output_tokens || 0;\n  } else {\n    inputTokens = response.usage?.prompt_tokens || 0;\n    outputTokens = response.usage?.completion_tokens || 0;\n  }\n  const costUSD = (inputTokens * inputPricePerM / 1000000) + (outputTokens * outputPricePerM / 1000000);\n  return { node, model, provider, inputTokens, outputTokens, costUSD: Math.round(costUSD * 1000000) / 1000000 };\n}\n\n// Aggregate all review feedback\nconst projectState = $('Combine Draft & Suggestions').item.json;\nconst geminiReview = $('Gemini: Comprehensive Review').item.json;\nconst claudeConsistency = $('Claude: Consistency Check').item.json;\nconst claudeLineEdit = $('Claude: Line Editing').item.json;\n\n// Token usage (updated pricing)\nconst newTokens = [\n  extractTokenUsage(geminiReview, 'Gemini: Comprehensive Review', 'gemini-2.5-flash', 'google', 0.15, 0.6),\n  extractTokenUsage(claudeConsistency, 'Claude: Consistency Check', 'claude-sonnet-4-20250514', 'anthropic', 3, 15),\n  extractTokenUsage(claudeLineEdit, 'Claude: Line Editing', 'claude-sonnet-4-20250514', 'anthropic', 3, 15)\n];\nconst tokenUsage = [...(projectState.tokenUsage || []), ...newTokens];\n\nlet developmentalFeedback = {};\nlet consistencyFeedback = {};\nlet lineEditFeedback = {};\n\ntry {\n  if (geminiReview.candidates && geminiReview.candidates[0]) {\n    const text = geminiReview.candidates[0].content.parts[0].text;\n    const jsonMatch = text.match(/\\{[\\s\\S]*\\}/);\n    developmentalFeedback = jsonMatch ? JSON.parse(jsonMatch[0]) : { raw: text };\n  }\n} catch (e) {\n  developmentalFeedback = { error: 'Parse error', raw: geminiReview };\n}\n\ntry {\n  if (claudeConsistency.content && claudeConsistency.content[0]) {\n    const text = claudeConsistency.content[0].text;\n    const jsonMatch = text.match(/\\{[\\s\\S]*\\}/);\n    consistencyFeedback = jsonMatch ? JSON.parse(jsonMatch[0]) : { raw: text };\n  }\n} catch (e) {\n  consistencyFeedback = { error: 'Parse error' };\n}\n\ntry {\n  if (claudeLineEdit.content && claudeLineEdit.content[0]) {\n    const text = claudeLineEdit.content[0].text;\n    const jsonMatch = text.match(/\\{[\\s\\S]*\\}/);\n    lineEditFeedback = jsonMatch ? JSON.parse(jsonMatch[0]) : { raw: text };\n  }\n} catch (e) {\n  lineEditFeedback = { error: 'Parse error' };\n}\n\nconst scores = [\n  developmentalFeedback.overallScore,\n  consistencyFeedback.consistencyScore,\n  lineEditFeedback.overallProseScore\n].filter(s => typeof s === 'number');\nconst avgScore = scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : 5;\n\n// Capture review feedback as spare text\nconst spareText = [...(projectState.spareText || [])];\nspareText.push({\n  source: 'Review Feedback',\n  chapter: projectState.currentChapterDraft.chapterNumber,\n  type: 'developmental_review',\n  content: JSON.stringify(developmentalFeedback, null, 2).substring(0, 5000)\n});\nif (lineEditFeedback.lineEdits) {\n  spareText.push({\n    source: 'Claude: Line Editing',\n    chapter: projectState.currentChapterDraft.chapterNumber,\n    type: 'line_edit_suggestions',\n    content: JSON.stringify(lineEditFeedback.lineEdits, null, 2).substring(0, 5000)\n  });\n}\n\n// Logging\nconst log = [...(projectState.pipelineLog || [])];\nlog.push({\n  timestamp: new Date().toISOString(),\n  node: 'Aggregate Review Feedback',\n  chapter: projectState.currentChapterDraft.chapterNumber,\n  action: 'Reviews aggregated',\n  avgScore: avgScore.toFixed(1),\n  needsRevision: avgScore < 7,\n  tokens: newTokens.reduce((sum, t) => sum + t.inputTokens + t.outputTokens, 0)\n});\n\nreturn {\n  json: {\n    ...projectState,\n    tokenUsage,\n    pipelineLog: log,\n    spareText,\n    review: {\n      developmental: developmentalFeedback,\n      consistency: consistencyFeedback,\n      lineEdit: lineEditFeedback,\n      averageScore: avgScore.toFixed(1),\n      needsRevision: avgScore < 7,\n      reviewedAt: new Date().toISOString()\n    }\n  }\n};"
       },
       "id": "aggregate-reviews",
       "name": "Aggregate Review Feedback",
@@ -505,7 +448,10 @@
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ model: 'claude-opus-4-6', max_tokens: 8000, messages: [{ role: 'user', content: `Revise this chapter based on editor feedback.\\n\\n## Original Chapter\\n${$json.currentChapterDraft.text.substring(0, 12000)}\\n\\n## Story Circle & Chapter Context\\n${(() => { if (!$json.useStoryCircle || $json.useStoryCircle === 'false') return ''; const ch = parseInt($json.currentChapterDraft?.chapterNumber || $json.currentChapter); const total = parseInt($json.targetChapters); const beats = ['You', 'Need', 'Go', 'Search', 'Find', 'Take', 'Return', 'Change']; const beatPos = ((ch - 1) / (total - 1)) * 8; const primaryBeat = Math.min(Math.floor(beatPos), 7); return 'Story Circle beat: ' + (primaryBeat + 1) + ' (' + beats[primaryBeat] + '). Preserve the emotional arc appropriate to this position.\\\\n'; })()}\\n${(() => { const ch = String($json.currentChapterDraft?.chapterNumber || $json.currentChapter); const outlines = (() => { try { return typeof $json.chapterOutlines === 'string' ? JSON.parse($json.chapterOutlines) : ($json.chapterOutlines || {}); } catch(e) { return {}; } })(); return outlines[ch] ? 'This chapter should follow this outline: ' + outlines[ch] : 'No specific outline \u2014 maintain narrative continuity.'; })()}\\n\\n## Author Feedback\\n${$json.authorFeedback ? 'The author has provided this guidance for the overall manuscript: ' + $json.authorFeedback : ''}\\n\\n## Developmental Feedback\\n${JSON.stringify($json.review.developmental).substring(0, 2000)}\\n\\n## Consistency Issues\\n${JSON.stringify($json.review.consistency).substring(0, 1500)}\\n\\n## Line Edit Suggestions\\n${JSON.stringify($json.review.lineEdit).substring(0, 2000)}\\n\\n## Creative Enhancement Ideas\\n${JSON.stringify($json.currentChapterDraft.creativeSuggestions || []).substring(0, 1000)}\\n\\n## Author Voice & Style\\n${$json.voiceGuide ? $json.voiceGuide : 'Maintain the voice established in the draft.'}\\n\\n## Instructions\\nRewrite the chapter preserving the author\\'s intended voice and style while addressing the feedback. Prioritize:\\n1. High-severity consistency issues\\n2. Pacing problems\\n3. Character authenticity\\n4. Incorporate relevant creative enhancements\\n5. Preserve the author\\'s voice and style throughout\\n\\nWrite the complete revised chapter:` }] }) }}",
-        "options": {}
+        "options": {
+          "timeout": 600000
+        },
+        "method": "POST"
       },
       "id": "claude-revise",
       "name": "Claude: Apply Revisions",
@@ -574,19 +520,11 @@
         "sheetName": {
           "__rl": true,
           "mode": "name",
-          "value": "={{ $json.projectSlug + '-chapters' }}"
+          "value": "={{ ($json.projectSlug || $('Finalize Chapter').first().json.projectSlug || 'unknown') + '-chapters' }}"
         },
         "columns": {
-          "mappingMode": "defineBelow",
-          "value": {
-            "Project Slug": "={{ $json.projectSlug }}",
-            "Chapter Number": "={{ $json.currentChapterDraft.chapterNumber }}",
-            "Word Count": "={{ $json.currentChapterDraft.wordCount }}",
-            "Final Score": "={{ $json.review.averageScore }}",
-            "Revision Count": "={{ $json.currentChapterDraft.revisionCount || 1 }}",
-            "Completed At": "={{ $now.toISO() }}",
-            "Chapter Text": "={{ $json.currentChapterDraft.text.substring(0, 50000) }}"
-          }
+          "mappingMode": "autoMapInputData",
+          "value": {}
         },
         "options": {}
       },
@@ -673,19 +611,11 @@
         "sheetName": {
           "__rl": true,
           "mode": "name",
-          "value": "={{ $json.projectSlug + '-log' }}"
+          "value": "={{ ($json.projectSlug || 'unknown') + '-log' }}"
         },
         "columns": {
-          "mappingMode": "defineBelow",
-          "value": {
-            "Project Slug": "={{ $json.projectSlug }}",
-            "Execution Date": "={{ $now.toISO() }}",
-            "Total Chapters": "={{ $json.summary?.totalChapters || 0 }}",
-            "Total Words": "={{ $json.summary?.totalWords || 0 }}",
-            "Total Cost USD": "={{ $json.costSummary?.totalCostUSD || 0 }}",
-            "Cost By Model": "={{ JSON.stringify($json.costSummary?.byModel || {}) }}",
-            "Pipeline Log": "={{ JSON.stringify($json.pipelineLog || []) }}"
-          }
+          "mappingMode": "autoMapInputData",
+          "value": {}
         },
         "options": {}
       },
@@ -711,16 +641,11 @@
         "sheetName": {
           "__rl": true,
           "mode": "name",
-          "value": "={{ $json.projectSlug + '-spare' }}"
+          "value": "={{ ($json.projectSlug || 'unknown') + '-spare' }}"
         },
         "columns": {
-          "mappingMode": "defineBelow",
-          "value": {
-            "Project Slug": "={{ $json.projectSlug }}",
-            "Execution Date": "={{ $now.toISO() }}",
-            "Spare Text Items": "={{ ($json.spareText || []).length }}",
-            "Spare Text": "={{ JSON.stringify($json.spareText || []) }}"
-          }
+          "mappingMode": "autoMapInputData",
+          "value": {}
         },
         "options": {}
       },
@@ -790,16 +715,6 @@
             "node": "ChatGPT: Plot Outline",
             "type": "main",
             "index": 0
-          },
-          {
-            "node": "Claude: Character Development",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Perplexity: Research & Facts",
-            "type": "main",
-            "index": 0
           }
         ]
       ]
@@ -808,7 +723,7 @@
       "main": [
         [
           {
-            "node": "Aggregate Planning Data",
+            "node": "Claude: Character Development",
             "type": "main",
             "index": 0
           }
@@ -819,7 +734,7 @@
       "main": [
         [
           {
-            "node": "Aggregate Planning Data",
+            "node": "Perplexity: Research & Facts",
             "type": "main",
             "index": 0
           }
@@ -896,15 +811,16 @@
       "main": [
         [
           {
-            "node": "Gemini: Comprehensive Review",
+            "node": "Claude: Consistency Check",
             "type": "main",
             "index": 0
-          },
-          {
-            "node": "ChatGPT: Consistency Check",
-            "type": "main",
-            "index": 0
-          },
+          }
+        ]
+      ]
+    },
+    "Claude: Consistency Check": {
+      "main": [
+        [
           {
             "node": "Claude: Line Editing",
             "type": "main",
@@ -913,29 +829,18 @@
         ]
       ]
     },
-    "Gemini: Comprehensive Review": {
-      "main": [
-        [
-          {
-            "node": "Aggregate Review Feedback",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "ChatGPT: Consistency Check": {
-      "main": [
-        [
-          {
-            "node": "Aggregate Review Feedback",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Claude: Line Editing": {
+      "main": [
+        [
+          {
+            "node": "Gemini: Comprehensive Review",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini: Comprehensive Review": {
       "main": [
         [
           {

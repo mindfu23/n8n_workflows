@@ -35,6 +35,9 @@ services:
       - N8N_SKIP_WEBHOOK_DEREGISTRATION_SHUTDOWN=true
       - N8N_DEFAULT_BINARY_DATA_MODE=filesystem
 
+      # API Keys (accessible via $env in Code nodes)
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+
       # CORS for frontend integration
       - N8N_CORS_ENABLED=${N8N_CORS_ENABLED:-false}
       - N8N_CORS_ORIGIN=${N8N_CORS_ORIGIN:-*}

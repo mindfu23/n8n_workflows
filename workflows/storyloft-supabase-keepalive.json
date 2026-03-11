@@ -1,0 +1,141 @@
+{
+  "name": "StoryLoft - Supabase Keep-Alive Ping",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "daysInterval": 5
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Every 5 Days",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [0, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Lightweight Supabase health check\n// Calls the Supabase REST health endpoint to keep the free-tier project active.\n// Supabase pauses inactive free projects after 7 days — this runs every 5 days.\n\nconst supabaseUrl = $env.STORYLOFT_SUPABASE_URL;\nconst supabaseKey = $env.STORYLOFT_SUPABASE_ANON_KEY;\n\nif (!supabaseUrl || !supabaseKey) {\n  throw new Error('STORYLOFT_SUPABASE_URL or STORYLOFT_SUPABASE_ANON_KEY not set in n8n environment variables.');\n}\n\nreturn {\n  json: {\n    url: `${supabaseUrl}/rest/v1/`,\n    headers: {\n      apikey: supabaseKey,\n      Authorization: `Bearer ${supabaseKey}`\n    },\n    supabaseUrl,\n    triggeredAt: new Date().toISOString()\n  }\n};"
+      },
+      "id": "build-request",
+      "name": "Build Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.url }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $json.headers.apikey }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "={{ $json.headers.Authorization }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "ping-supabase",
+      "name": "Ping Supabase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const result = $input.first().json;\nconst triggeredAt = $('Build Request').first().json.triggeredAt;\n\nreturn {\n  json: {\n    status: 'ok',\n    message: 'Supabase keep-alive ping succeeded',\n    triggeredAt,\n    completedAt: new Date().toISOString(),\n    httpStatus: result.$response?.statusCode ?? 'unknown'\n  }\n};"
+      },
+      "id": "log-success",
+      "name": "Log Success",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "const error = $input.first().json;\nconst triggeredAt = $('Build Request').first().json.triggeredAt;\n\n// Log the failure — extend this node to send a Slack/email alert if desired\nconsole.error('StoryLoft Supabase keep-alive FAILED:', JSON.stringify(error));\n\nreturn {\n  json: {\n    status: 'error',\n    message: 'Supabase keep-alive ping failed',\n    triggeredAt,\n    failedAt: new Date().toISOString(),\n    error: error.message ?? JSON.stringify(error)\n  }\n};"
+      },
+      "id": "log-failure",
+      "name": "Log Failure",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 420]
+    }
+  ],
+  "connections": {
+    "Every 5 Days": {
+      "main": [
+        [
+          {
+            "node": "Build Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Request": {
+      "main": [
+        [
+          {
+            "node": "Ping Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ping Supabase": {
+      "main": [
+        [
+          {
+            "node": "Log Success",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "saveExecutionProgress": false,
+    "saveDataSuccessExecution": "last",
+    "saveDataErrorExecution": "all"
+  },
+  "tags": [
+    {
+      "name": "storyloft"
+    },
+    {
+      "name": "maintenance"
+    }
+  ],
+  "meta": {
+    "notes": "Keeps the StoryLoft Supabase free-tier project active by pinging the REST endpoint every 5 days (Supabase pauses after 7 days of inactivity).\n\nRequired n8n environment variables:\n  STORYLOFT_SUPABASE_URL  — e.g. https://abcdefgh.supabase.co\n  STORYLOFT_SUPABASE_ANON_KEY — the project anon/public key\n\nTo add alert on failure: extend the 'Log Failure' node to POST to a Slack webhook or send an email via the existing Brevo credential."
+  }
+}
